@@ -1,0 +1,21 @@
+<div id="main">
+    <h3>Tasks</h3>
+    <div class="container" data-bind="sortable: tasks">
+        <div class="item">
+            <span data-bind="visible: !$root.isTaskSelected($data)">
+                <a href="#" data-bind="text: name, click: $root.selectedTask"></a>
+            </span>
+            <span data-bind="visibleAndSelect: $root.isTaskSelected($data)">
+                <input data-bind="value: name, event: { blur: $root.clearTask }" />
+            </span>  
+        </div>
+    </div>
+    <a href="#" data-bind="click: addTask">Add Task</a>
+</div>
+
+<div id="results">
+    <h3>Tasks</h3>
+    <ul data-bind="foreach: tasks">
+        <li data-bind="text: name"></li>
+    </ul>
+</div>

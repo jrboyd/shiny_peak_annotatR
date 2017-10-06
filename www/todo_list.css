@@ -1,0 +1,57 @@
+body {
+    font-family: arial;
+}
+
+h3 {
+    text-align: center;
+    font-weight: bold;
+}
+
+div {
+    padding: 5px;
+    margin: 5px;
+    border: black 1px solid;
+}
+
+p, a {
+    font-size: .8em;
+}
+
+ul {
+    padding-bottom: 10px;
+}
+
+.ko_container {
+    width: 125px;
+    min-height: 50px;
+    background-color: #AAA;
+}
+
+.high {
+    background-color: red;
+}
+
+.trash {
+    background-color: #000;
+}
+
+.item {
+    background-color: #DDD;
+    cursor: move;
+    text-align: center;
+}
+
+.item input {
+    width: 100px;
+}
+
+#main {
+    float: left;
+    width: 150px;
+    margin-top: 0px;
+}
+
+#results {
+    margin-left: 175px;
+    width: 150px;
+}
