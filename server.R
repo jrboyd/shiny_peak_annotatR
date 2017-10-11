@@ -10,6 +10,26 @@ library(shinyFiles)
 library(GenomicRanges)
 source("functions_intersect.R")
 
+
+# Return the UI for a modal dialog with data selection input. If 'failed' is
+# TRUE, then display a message that the previous value was invalid.
+dataModal <- function(sets, failed = FALSE) {
+  sets_html = HTML(paste(sapply(sets$selected[1], function(x){
+    as.character(textInput("TxtRename", label = paste("rename", x), value = x))
+  }), collapse = "\n"))
+  modalDialog(
+    sets_html,
+    span('(Please rename the selected sample)'),
+    if (failed)
+      div(tags$b("One or more names no longer unique!", style = "color: red;")),
+    
+    footer = tagList(
+      modalButton("Cancel"),
+      actionButton("BtnConfirmRename", "Confirm")
+    )
+  )
+}
+
 shinyFiles2load = function(shinyF, roots){
   root_path = roots[shinyF$root]
   rel_path = paste0(unlist(shinyF$files), collapse = "/")
@@ -35,7 +55,8 @@ shinyServer(function(input, output, session) {
   
   peak_prev_file = reactiveVal(value = NULL, label = "peak_prev_file")
   peak_prev_name = reactiveVal(value = NULL, label = "peak_prev_name")
-  peak_files = reactiveValues() 
+  peak_files = reactiveValues()
+  # peak_files = reactiveVal(value = list(), label) 
   
   observeEvent(input$BtnAddFile, {
     if(is.null(peak_dfr())) return(NULL)
@@ -70,12 +91,71 @@ shinyServer(function(input, output, session) {
     updateTextInput(session, "TxtFileName", value = new_val)
   })
   
-  output$chooser = renderUI({
+  output$SetChooser = renderUI({
     pf = names(reactiveValuesToList(peak_files))
     print(pf)
     return(chooserInput(inputId = "ChooseIntervalSets", 
                         leftLabel = "Ready", rightLabel = "For Analysis", 
-                        leftChoices = character(), rightChoices = pf, size = 8, multiple = T))
+                        leftChoices = character(), rightChoices = pf, size = 8, multiple = F))
+  })
+  
+  observeEvent(input$BtnDeleteSet, {
+    print(input$ChooseIntervalSets)
+  })
+  observeEvent(input$BtnRenameSet, {
+    sets = input$ChooseIntervalSets
+    if(is.null(sets)) return(NULL)
+    if(length(sets$selected) == 0) return(NULL)
+    print(sets)
+    # sets = list()
+    # sets$left = 1:3
+    # sets$right = 4:6
+    # sets$selected = 4:5
+    # ki = which(grepl("^TxtRename-", names(input)))
+    # for(i in ki){
+    #   nam = names(input)[i]
+    #   input[[nam]] = NULL
+    # }
+    showModal(dataModal(sets = sets))
+  })
+  
+  # When OK button is pressed, attempt to load the data set. If successful,
+  # remove the modal. If not show another modal, but this time with a failure
+  # message.
+  observeEvent(input$BtnConfirmRename, {
+    sets = input$ChooseIntervalSets
+    old_name = sets$selected[1]
+    new_name = input$TxtRename
+    print(paste("rename", old_name, "-->", new_name))
+    if(old_name == new_name){
+      removeModal()
+    }else if(any(c(unique(c(sets$left, sets$right)) == new_name))){
+      showModal(dataModal(failed = TRUE))
+    }else{
+      
+      print(names(peak_files) == old_name)
+      print(names(peak_files))
+      peak_files = rev(peak_files)
+      # names(peak_files)[names(peak_files) == old_name] = new_name
+      print(names(peak_files))
+      removeModal()
+    }
+    # length(intersect(new_name, ) > 0
+    # print()
+    # names(input$TxtRename)
+    # if (!is.null(input$dataset) && nzchar(input$dataset) &&
+    #     exists(input$dataset) && is.data.frame(get(input$dataset))) {
+    #   vals$data <- get(input$dataset)
+    #   removeModal()
+    # } else {
+    #   
+    # }
+  })
+  
+  output$NumericMergeExtensionOut = renderUI({
+    if(!is.null(input$SliderMergeExtension))
+      num = input$SliderMergeExtension
+    numericInput(inputId = "NumericMergeExtension", label = "", min = 0, max = Inf, value = num)
   })
   
   peak_dfr = reactive({
@@ -150,7 +230,7 @@ shinyServer(function(input, output, session) {
     peak_df = peak_df[to_anlayze]
     peak_gr = lapply(peak_df, GRanges)
     
-    gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial"))
+    gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
   })
   
   output$AnalysisPlot = renderPlot({

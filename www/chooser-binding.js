@@ -87,8 +87,9 @@ binding.initialize = function(el) {
 binding.getValue = function(el) {
   return {
     left: $.makeArray($(el).find("select.left option").map(function(i, e) { return e.value; })),
-    right: $.makeArray($(el).find("select.right option").map(function(i, e) { return e.value; }))
-  }
+    right: $.makeArray($(el).find("select.right option").map(function(i, e) { return e.value; })),
+    selected: $.makeArray($(el).find("select.right option:selected").map(function(i, e) { return e.value; }))
+  };
 };
 
 binding.setValue = function(el, value) {

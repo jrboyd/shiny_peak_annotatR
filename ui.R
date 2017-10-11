@@ -71,17 +71,37 @@ shinyUI(fluidPage(
     )
   ),
   br("step2 - organize"),
-  uiOutput("chooser"),
+  fixedRow(
+    column(width = 4,
+           uiOutput("SetChooser")
+    ),
+    column(width = 4,
+           actionButton("BtnDeleteSet", label = "Delete"),
+           # fixedRow(
+           # column(width = 9,
+           # textInput("TxtRenameSet", label = ""),
+           # ),
+           # column(width = 3,
+           actionButton("BtnRenameSet", label = "Rename")
+           # )
+           # )
+    )
+  ),
   br("step3 - analyze"),
   sidebarLayout(
     sidebarPanel(width = 4,
                  fixedRow(
-                   column(width = 6,
-                     radioButtons(inputId = "StrategyRadio", label = "Strategy Type", 
-                                  choices = c("flat (venn)" = "flat", "serial (pie)" = "serial"))
+                   column(width = 4,
+                          radioButtons(inputId = "StrategyRadio", label = "Strategy Type", 
+                                       choices = c("flat (venn)" = "flat", "serial (pie)" = "serial"))
                    ),
-                   column(width = 6,
-                     radioButtons(inputId = "RadioPlotType", label = "Plot Type", choices = c("venn", "pie", "heatmap"))
+                   column(width = 4,
+                          radioButtons(inputId = "RadioPlotType", label = "Plot Type", choices = c("venn", "pie", "heatmap"))
+                   ),
+                   column(width = 4,
+                          sliderInput(inputId = "SliderMergeExtension", label = "Extension", min = 0, max = 5*10^3, value = 0, round = 2, step = 100),
+                          uiOutput(outputId = "NumericMergeExtensionOut")
+                          
                    )
                  ),
                  radioTooltip(id = "StrategyRadio", choice = "serial", title = "pie chart appropriate. annotate each interval in first file to one and only one category (1 category per additional file).", placement = "right", trigger = "hover"),

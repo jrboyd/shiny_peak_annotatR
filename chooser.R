@@ -43,6 +43,8 @@ registerInputHandler("shinyjsexamples.chooser", function(data, ...) {
   if (is.null(data))
     NULL
   else
-    list(left=as.character(data$left), right=as.character(data$right))
+    list(left=as.character(data$left), 
+         right=as.character(data$right), 
+         selected = as.character(data$selected))
 }, force = TRUE)
 
