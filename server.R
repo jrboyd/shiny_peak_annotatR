@@ -55,17 +55,55 @@ shinyServer(function(input, output, session) {
   
   peak_prev_file = reactiveVal(value = NULL, label = "peak_prev_file")
   peak_prev_name = reactiveVal(value = NULL, label = "peak_prev_name")
-  peak_files = reactiveValues()
-  # peak_files = reactiveVal(value = list(), label) 
+  #stores all set data, keyed by set_id
+  peak_files = reactiveVal(value = list(), label = "peak_files")
+  #stores the order of peak_files as well as any updated names
+  peak_names = reactiveVal(value = data.frame(set_id = character(), display_name = character()))
   
   observeEvent(input$BtnAddFile, {
     if(is.null(peak_dfr())) return(NULL)
-    peak_files[[input$TxtFileName]] = peak_dfr()
-    curr_sel = isolate(input$ListIntervalSets)
-    updateSelectInput(session, inputId = "ListIntervalSets", choices = isolate(names(reactiveValuesToList(peak_files))), c(curr_sel, input$TxtFileName), label = NULL)
+    tmp = peak_files()
+    tmp[[input$TxtFileName]] = peak_dfr()
+    peak_files(tmp)
+    # peak_names(
+    #   rbind(
+    #     peak_names(), 
+    #     data.frame(set_id = input$TxtFileName, display_name = input$TxtFileName)
+    #   )
+    # )
+    
+    sets = isolate(input$ChooseIntervalSets)
+    output$SetChooser = renderUI({
+      pfl = sets$left
+      #add to active
+      pfr = c(sets$right, input$TxtFileName)
+      
+      # print(pf)
+      return(chooserInput(inputId = "ChooseIntervalSets", 
+                          leftLabel = "Ready", rightLabel = "For Analysis", 
+                          leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
+    })
+    
+    # curr_sel = isolate(input$ListIntervalSets)
+    # updateSelectInput(session, inputId = "ListIntervalSets", choices = isolate(names(peak_files())), c(curr_sel, input$TxtFileName), label = NULL)
     # print(object.size(isolate(reactiveValuesToList(peak_files))))
     peak_prev_file(NULL)
     peak_prev_name(NULL)
+  })
+  
+  observeEvent(peak_files, {
+    if(length(peak_files()) == 0){
+      output$SetChooser = renderUI({
+        pfl = character()
+        #add to active
+        pfr = character()
+        
+        # print(pf)
+        return(chooserInput(inputId = "ChooseIntervalSets", 
+                            leftLabel = "Ready", rightLabel = "For Analysis", 
+                            leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
+      })
+    }
   })
   
   observeEvent(input$BtnCancelFile, {
@@ -91,31 +129,32 @@ shinyServer(function(input, output, session) {
     updateTextInput(session, "TxtFileName", value = new_val)
   })
   
-  output$SetChooser = renderUI({
-    pf = names(reactiveValuesToList(peak_files))
-    print(pf)
-    return(chooserInput(inputId = "ChooseIntervalSets", 
-                        leftLabel = "Ready", rightLabel = "For Analysis", 
-                        leftChoices = character(), rightChoices = pf, size = 8, multiple = F))
+
+  
+  observeEvent(input$ChooseIntervalSets, {
+    sets = input$ChooseIntervalSets
   })
   
   observeEvent(input$BtnDeleteSet, {
-    print(input$ChooseIntervalSets)
+    sets = input$ChooseIntervalSets
+    to_del = sets$selected
+    
+    sets$left = setdiff(sets$left, to_del)
+    sets$right = setdiff(sets$right, to_del)
+    output$SetChooser = renderUI({
+      pfl = sets$left
+      pfr = sets$right
+      return(chooserInput(inputId = "ChooseIntervalSets", 
+                          leftLabel = "Ready", rightLabel = "For Analysis", 
+                          leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
+    })
+    
   })
   observeEvent(input$BtnRenameSet, {
     sets = input$ChooseIntervalSets
     if(is.null(sets)) return(NULL)
     if(length(sets$selected) == 0) return(NULL)
-    print(sets)
-    # sets = list()
-    # sets$left = 1:3
-    # sets$right = 4:6
-    # sets$selected = 4:5
-    # ki = which(grepl("^TxtRename-", names(input)))
-    # for(i in ki){
-    #   nam = names(input)[i]
-    #   input[[nam]] = NULL
-    # }
+    # print(sets)
     showModal(dataModal(sets = sets))
   })
   
@@ -132,24 +171,22 @@ shinyServer(function(input, output, session) {
     }else if(any(c(unique(c(sets$left, sets$right)) == new_name))){
       showModal(dataModal(failed = TRUE))
     }else{
+      tmp = peak_files()
+      names(tmp)[names(tmp) == old_name] = new_name
+      peak_files(tmp)
       
-      print(names(peak_files) == old_name)
-      print(names(peak_files))
-      peak_files = rev(peak_files)
-      # names(peak_files)[names(peak_files) == old_name] = new_name
-      print(names(peak_files))
+      
+      sets$left[sets$left == old_name] = new_name
+      sets$right[sets$right == old_name] = new_name
+      output$SetChooser = renderUI({
+        pfl = sets$left
+        pfr = sets$right
+        return(chooserInput(inputId = "ChooseIntervalSets", 
+                            leftLabel = "Ready", rightLabel = "For Analysis", 
+                            leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
+      })
       removeModal()
     }
-    # length(intersect(new_name, ) > 0
-    # print()
-    # names(input$TxtRename)
-    # if (!is.null(input$dataset) && nzchar(input$dataset) &&
-    #     exists(input$dataset) && is.data.frame(get(input$dataset))) {
-    #   vals$data <- get(input$dataset)
-    #   removeModal()
-    # } else {
-    #   
-    # }
   })
   
   output$NumericMergeExtensionOut = renderUI({
@@ -174,10 +211,6 @@ shinyServer(function(input, output, session) {
     df = peak_dfr()
     # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
     DT::datatable(df)#, caption = paste0("Preview of", basename(peak_prev_file()), ":"))
-  })
-  
-  observe({
-    print(input$StrategyRadio)
   })
   
   output$peaksFilter = renderUI({
@@ -211,11 +244,22 @@ shinyServer(function(input, output, session) {
   observeEvent(input$BtnQuickFlat, handlerExpr = {
     load("peak_gr.save")
     for(i in 1:length(peak_gr)){
-      peak_files[[names(peak_gr)[i]]] = peak_gr[[i]]
+      tmp = peak_files()
+      tmp[[names(peak_gr)[i]]] = peak_gr[[i]]
+      peak_files(tmp)
     }
     
-    updateSelectInput(session, inputId = "ListIntervalSets", choices = isolate(names(reactiveValuesToList(peak_files))), label = NULL)
-    # print(object.size(isolate(reactiveValuesToList(peak_files))))
+    sets = isolate(input$ChooseIntervalSets)
+    output$SetChooser = renderUI({
+      pfl = sets$left
+      #add to active
+      pfr = unique(c(sets$right, names(peak_gr)))
+      
+      # print(pf)
+      return(chooserInput(inputId = "ChooseIntervalSets", 
+                          leftLabel = "Ready", rightLabel = "For Analysis", 
+                          leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
+    })
     # peak_prev_file(NULL)
     # peak_prev_name(NULL)
   })
@@ -226,17 +270,17 @@ shinyServer(function(input, output, session) {
     print(input$StrategyRadio)
     to_anlayze = input$ChooseIntervalSets$right
     names(to_anlayze) = to_anlayze
-    peak_df = reactiveValuesToList(peak_files)
+    peak_df = peak_files()
     peak_df = peak_df[to_anlayze]
     peak_gr = lapply(peak_df, GRanges)
-    
+    print(names(peak_gr))
     gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
   })
   
   output$AnalysisPlot = renderPlot({
     if(is.null(gr_to_plot())) return(NULL)
     gr = gr_to_plot()
-    nam = names(reactiveValuesToList(peak_files))
+    nam = names(peak_files())
     df = as.data.frame(elementMetadata(gr))
     tp = which(colnames(df) != "group")
     

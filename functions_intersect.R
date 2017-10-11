@@ -57,7 +57,7 @@ intersectR = function(grs, ext = 100000, use_first = F){
     elementMetadata(base_gr)[[nam]][queryHits(olaps)] = T
   }
   base_gr$group = "no_hit"
-  for(i in 1:length(grs)){
+  for(i in rev(1:length(grs))){
     i_gr = grs[[i]]
     olaps = findOverlaps(base_gr, i_gr)
     base_gr[queryHits(olaps)]$group = names(grs)  [i]
