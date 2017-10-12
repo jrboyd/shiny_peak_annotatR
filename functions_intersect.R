@@ -39,7 +39,7 @@ intersect_flat = function(grs){
 # load('peak_gr.save')
 # grs = peak_gr
 
-intersectR = function(grs, ext = 100000, use_first = F){
+intersectR = function(grs, ext = 0, use_first = F){
   if(use_first){
     base_gr = grs[[1]]
     elementMetadata(base_gr) = NULL
@@ -50,6 +50,8 @@ intersectR = function(grs, ext = 100000, use_first = F){
   start(base_gr) = start(base_gr) - ext
   end(base_gr) = end(base_gr) + ext
   base_gr = reduce(base_gr)
+  start(base_gr) = start(base_gr) + ext
+  end(base_gr) = end(base_gr) - ext
   for(i in 1:length(grs)){
     nam = names(grs)[i]
     elementMetadata(base_gr)[[nam]] = F
