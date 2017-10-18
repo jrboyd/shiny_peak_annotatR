@@ -52,9 +52,8 @@ shinyServer(function(input, output, session) {
   dir.create(roots_output, showWarnings = F)
   shinyFileSave(input, 'FilesSaveResults', roots= roots_output, filetypes=c("bed"))
   peak_cn = c("seqnames", "start", "end", "id", "score", "strand", "FE", "p-value", "q-value", "summit_pos")
-  
-  peak_prev_file = reactiveVal(value = NULL, label = "peak_prev_file")
-  peak_prev_name = reactiveVal(value = NULL, label = "peak_prev_name")
+  peak_prev_file = reactiveVal(value = "", label = "peak_prev_file")
+  peak_prev_name = reactiveVal(value = "", label = "peak_prev_name")
   #stores all set data, keyed by set_id
   peak_files = reactiveVal(value = list(), label = "peak_files")
   #stores the order of peak_files as well as any updated names
@@ -65,30 +64,19 @@ shinyServer(function(input, output, session) {
     tmp = peak_files()
     tmp[[input$TxtFileName]] = peak_dfr()
     peak_files(tmp)
-    # peak_names(
-    #   rbind(
-    #     peak_names(), 
-    #     data.frame(set_id = input$TxtFileName, display_name = input$TxtFileName)
-    #   )
-    # )
-    
-    sets = isolate(input$ChooseIntervalSets)
+    sets = input$ChooseIntervalSets
     output$SetChooser = renderUI({
       pfl = sets$left
       #add to active
-      pfr = c(sets$right, input$TxtFileName)
+      pfr = c(sets$right, isolate(input$TxtFileName))
       
       # print(pf)
       return(chooserInput(inputId = "ChooseIntervalSets", 
                           leftLabel = "Ready", rightLabel = "For Analysis", 
                           leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
     })
-    
-    # curr_sel = isolate(input$ListIntervalSets)
-    # updateSelectInput(session, inputId = "ListIntervalSets", choices = isolate(names(peak_files())), c(curr_sel, input$TxtFileName), label = NULL)
-    # print(object.size(isolate(reactiveValuesToList(peak_files))))
-    peak_prev_file(NULL)
-    peak_prev_name(NULL)
+    peak_prev_file("")
+    peak_prev_name("")
   })
   
   observeEvent(peak_files, {
@@ -107,8 +95,8 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$BtnCancelFile, {
-    peak_prev_file(NULL)
-    peak_prev_name(NULL)
+    peak_prev_file("")
+    peak_prev_name("")
   })
   
   observeEvent(input$FilesLoadData, {
@@ -122,17 +110,12 @@ shinyServer(function(input, output, session) {
     peak_prev_name(input$uploadPeakfile$name)
   })
   
-  observe({
+  #whenever peak_prev_name changes (new file selected or file added/cancelled) update text box.
+  observeEvent(peak_prev_name(), {
     new_val =  peak_prev_name()
     if(is.null(new_val)) new_val = ""
     print(paste('update:', new_val))
     updateTextInput(session, "TxtFileName", value = new_val)
-  })
-  
-
-  
-  observeEvent(input$ChooseIntervalSets, {
-    sets = input$ChooseIntervalSets
   })
   
   observeEvent(input$BtnDeleteSet, {
@@ -197,8 +180,18 @@ shinyServer(function(input, output, session) {
   
   peak_dfr = reactive({
     if(is.null(peak_prev_file())) return(NULL)
+    if(peak_prev_file() == "") return(NULL)
     df = read.table(peak_prev_file(), stringsAsFactors = F)
-    colnames(df) = peak_cn
+    if(ncol(df) == length(peak_cn)){
+      showNotification("assuming file is narrowPeak.", type = "warning")
+      colnames(df) = peak_cn  
+    }else{
+      showNotification("file not narrowPeak, loading as minimal bed file.", type = "warning")
+      bed_cn = peak_cn[1:4]
+      nc = min(ncol(df), length(bed_cn))
+      colnames(df)[1:nc] = peak_cn[1:nc]
+    }
+    
     return(df)
   })
   
@@ -210,25 +203,12 @@ shinyServer(function(input, output, session) {
     }
     df = peak_dfr()
     # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-    DT::datatable(df)#, caption = paste0("Preview of", basename(peak_prev_file()), ":"))
+    DT::datatable(df, 
+                  filter = list(position = "top", clear = TRUE, plain = F),
+                  options = list(
+                    pageLength = 5), rownames = F)
   })
   
-  output$peaksFilter = renderUI({
-    if(is.null(peak_dfr())) 
-      return(    
-        # fixedRow(
-        #   selectInput("FilterColname", label = "", choices = "waiting..."),
-        #   selectInput("FilterOperator", label = "", choice = c("==", "!=", ">", "<", ">=", "<=")),
-        #   textInput("FilterValue", label = "")
-        # )
-        NULL
-      )
-    fixedRow(
-      column(selectInput("FilterColname", label = "", choices = colnames(peak_dfr())), width = 4),
-      column(selectInput("FilterOperator", label = "", choice = c("==", "!=", ">", "<", ">=", "<=")), width = 2),
-      column(textInput("FilterValue", label = ""), width = 6)
-    )
-  })
   
   output$distPlot <- renderPlot({
     
@@ -249,7 +229,7 @@ shinyServer(function(input, output, session) {
       peak_files(tmp)
     }
     
-    sets = isolate(input$ChooseIntervalSets)
+    sets = input$ChooseIntervalSets
     output$SetChooser = renderUI({
       pfl = sets$left
       #add to active
@@ -266,24 +246,51 @@ shinyServer(function(input, output, session) {
   
   gr_to_plot = reactiveVal(label = "gr_to_plot")
   
-  observeEvent(input$BtnAnalyze, handlerExpr = {
-    print(input$StrategyRadio)
-    to_anlayze = input$ChooseIntervalSets$right
-    names(to_anlayze) = to_anlayze
+  # observeEvent(input$BtnAnalyze, handlerExpr = {
+  #   print(input$StrategyRadio)
+  #   to_anlayze = input$ChooseIntervalSets$right
+  #   names(to_anlayze) = to_anlayze
+  #   peak_df = peak_files()
+  #   peak_df = peak_df[to_anlayze]
+  #   peak_gr = lapply(peak_df, GRanges)
+  #   print(names(peak_gr))
+  #   gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
+  # })
+  # 
+  
+  #insulate other elements from needless updates when ChooseIntervalSets not really updated
+  observeEvent(input$ChooseIntervalSets, {
+    new_anlayze = input$ChooseIntervalSets$right
+    names(new_anlayze) = new_anlayze
+    was_analyze = to_analyze()
+    if(length(was_analyze) != length(new_anlayze)){
+      to_analyze(new_anlayze)
+    }else if(!all(was_analyze == new_anlayze)){
+      to_analyze(new_anlayze)
+    }
+    
+  })
+  
+  to_analyze = reactiveVal(character())
+  
+  output$AnalysisPlot = renderPlot({
+    if(is.null(input$NumericMergeExtension) || 
+       is.null(isolate(input$ChooseIntervalSets))) return(NULL)
+    if(length(isolate(input$ChooseIntervalSets$right)) == 0) return(NULL)
+    # print(input$StrategyRadio)
+    to_analyze_ = to_analyze()
+    names(to_analyze_) = to_analyze_
     peak_df = peak_files()
-    peak_df = peak_df[to_anlayze]
+    peak_df = peak_df[to_analyze_]
     peak_gr = lapply(peak_df, GRanges)
     print(names(peak_gr))
     gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
-  })
-  
-  output$AnalysisPlot = renderPlot({
     if(is.null(gr_to_plot())) return(NULL)
     gr = gr_to_plot()
     nam = names(peak_files())
     df = as.data.frame(elementMetadata(gr))
     tp = which(colnames(df) != "group")
-    
+    input$StrategyRadio
     switch(input$RadioPlotType,
            "pie" = {
              print("plot: pie")

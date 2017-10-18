@@ -1,4 +1,3 @@
-
 # This is the user-interface definition of a Shiny web application.
 # You can find out more about building applications with Shiny here:
 #
@@ -111,7 +110,7 @@ shinyUI(fluidPage(
                                   tags$div(
                                     HTML(paste("", tags$span(style="color:red", "Strategy is serial: First file will be annotated serially by all others.  Earlier files take precedence over later."), sep = ""))
                                   )),
-                 actionButton("BtnAnalyze", label = "Analyze!"),
+                 # actionButton("BtnAnalyze", label = "Analyze!"),
                  actionButton("BtnSaveResults", label = "Download Results"),
                  shinySaveButton(id = "FilesSaveResults", label = "Save Results", title = "Save Results")
     ),
