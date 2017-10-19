@@ -10,6 +10,7 @@ library(shinyFiles)
 library(GenomicRanges)
 source("functions_intersect.R")
 
+bed_path = "~/ShinyApps/shiny_peak_data/beds"
 
 # Return the UI for a modal dialog with data selection input. If 'failed' is
 # TRUE, then display a message that the previous value was invalid.
@@ -48,7 +49,7 @@ shinyServer(function(input, output, session) {
   roots_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
   names(roots_load) <- basename(roots_load)
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak"))
-  roots_output =  c("bed_dir" = "intersectR_beds")
+  roots_output =  c("bed_dir" = bed_path)
   dir.create(roots_output, showWarnings = F)
   shinyFileSave(input, 'FilesSaveResults', roots= roots_output, filetypes=c("bed"))
   peak_cn = c("seqnames", "start", "end", "id", "score", "strand", "FE", "p-value", "q-value", "summit_pos")
