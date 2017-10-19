@@ -105,7 +105,7 @@ shinyUI(fluidPage(
                  ),
                  radioTooltip(id = "StrategyRadio", choice = "serial", title = "pie chart appropriate. annotate each interval in first file to one and only one category (1 category per additional file).", placement = "right", trigger = "hover"),
                  radioTooltip(id = "StrategyRadio", choice = "flat", title = "venn diagram appropriate. combine and flatten all intervals then assign each interval to as many categories as apply (1 category per file)", placement = "right", trigger = "hover"),
-                 actionButton("BtnQuickFlat", label = "Quick Flat"),
+                 actionButton("BtnQuickFlat", label = "Load Example"),
                  conditionalPanel(condition = "input.StrategyRadio == 'serial'",
                                   tags$div(
                                     HTML(paste("", tags$span(style="color:red", "Strategy is serial: First file will be annotated serially by all others.  Earlier files take precedence over later."), sep = ""))

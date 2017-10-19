@@ -58,7 +58,6 @@ shinyServer(function(input, output, session) {
   #stores all set data, keyed by set_id
   peak_files = reactiveVal(value = list(), label = "peak_files")
   #stores the order of peak_files as well as any updated names
-  peak_names = reactiveVal(value = data.frame(set_id = character(), display_name = character()))
   
   observeEvent(input$BtnAddFile, {
     if(is.null(peak_dfr())) return(NULL)
@@ -179,21 +178,32 @@ shinyServer(function(input, output, session) {
     numericInput(inputId = "NumericMergeExtension", label = "", min = 0, max = Inf, value = num)
   })
   
-  peak_dfr = reactive({
-    if(is.null(peak_prev_file())) return(NULL)
-    if(peak_prev_file() == "") return(NULL)
-    df = read.table(peak_prev_file(), stringsAsFactors = F)
+  load_peak_wValidation = function(peak_file, with_notes = F){
+    df = read.table(peak_file, stringsAsFactors = F)
     if(ncol(df) == length(peak_cn)){
-      showNotification("assuming file is narrowPeak.", type = "warning")
+      if(with_notes){
+        showNotification("assuming file is narrowPeak.", type = "warning")
+      }else{
+        print("assuming file is narrowPeak.")
+      }
       colnames(df) = peak_cn  
     }else{
-      showNotification("file not narrowPeak, loading as minimal bed file.", type = "warning")
+      if(with_notes){
+        showNotification("file not narrowPeak, loading as minimal bed file.", type = "warning")
+      }else{
+        print("file not narrowPeak, loading as minimal bed file.")
+      }
       bed_cn = peak_cn[1:4]
       nc = min(ncol(df), length(bed_cn))
       colnames(df)[1:nc] = peak_cn[1:nc]
     }
-    
     return(df)
+  }
+  
+  peak_dfr = reactive({
+    if(is.null(peak_prev_file())) return(NULL)
+    if(peak_prev_file() == "") return(NULL)
+    load_peak_wValidation(peak_prev_file())
   })
   
   output$peaksHeader = DT::renderDataTable({
@@ -223,7 +233,10 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$BtnQuickFlat, handlerExpr = {
-    load("peak_gr.save")
+    peak_dirs = dir("/slipstream/galaxy/uploads/working/qc_framework/output_drugs_with_merged_inputs/", pattern = "MCF7_bza.+pooled", full.names = T)
+    peak_files = sapply(peak_dirs[!grepl("_input_", peak_dirs)], function(d){dir(d, pattern = "peaks_passIDR", full.names = T)})
+    names(peak_files) = sapply(strsplit(basename(peak_files), "_"), function(x)paste(x[1:3], collapse = "_"))
+    peak_gr = lapply(peak_files, load_peak_wValidation)
     for(i in 1:length(peak_gr)){
       tmp = peak_files()
       tmp[[names(peak_gr)[i]]] = peak_gr[[i]]
@@ -284,6 +297,7 @@ shinyServer(function(input, output, session) {
     peak_df = peak_files()
     peak_df = peak_df[to_analyze_]
     peak_gr = lapply(peak_df, GRanges)
+    
     print(names(peak_gr))
     gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
     if(is.null(gr_to_plot())) return(NULL)
@@ -305,7 +319,14 @@ shinyServer(function(input, output, session) {
              print("plot: heatmap")
              mat = ifelse(as.matrix(df[,tp]), 1, 0)
              mat = mat + runif(length(mat), min = -.02, .02)
-             gplots::heatmap.2(mat[sample(nrow(mat), 2000),]+.2, col = c("white", "black"), trace = "n")
+             require(gplots)
+             if(ncol(mat) < 2){
+               plot(0:1, 0:1)
+               text(.5, .5, "not enough sets for heatmap")
+             }else{
+               heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
+             }
+             
            })
   })
   

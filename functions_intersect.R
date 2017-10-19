@@ -40,30 +40,34 @@ intersect_flat = function(grs){
 # grs = peak_gr
 
 intersectR = function(grs, ext = 0, use_first = F){
+  save(grs, ext, use_first, file = "last_intersectR.save")
   if(use_first){
     base_gr = grs[[1]]
     elementMetadata(base_gr) = NULL
     grs = grs[-1]
   }else{
-    base_gr = reduce(unlist(GRangesList(grs)))
+    require(magrittr)
+    base_gr = lapply(grs, function(x){elementMetadata(x) = NULL; x}) %>% GRangesList %>% unlist %>% reduce
   }
   start(base_gr) = start(base_gr) - ext
   end(base_gr) = end(base_gr) + ext
   base_gr = reduce(base_gr)
   start(base_gr) = start(base_gr) + ext
   end(base_gr) = end(base_gr) - ext
-  for(i in 1:length(grs)){
-    nam = names(grs)[i]
-    elementMetadata(base_gr)[[nam]] = F
-    olaps = findOverlaps(base_gr, grs[[i]])
-    elementMetadata(base_gr)[[nam]][queryHits(olaps)] = T
-  }
-  base_gr$group = "no_hit"
-  for(i in rev(1:length(grs))){
-    i_gr = grs[[i]]
-    olaps = findOverlaps(base_gr, i_gr)
-    base_gr[queryHits(olaps)]$group = names(grs)  [i]
-  }
+  suppressWarnings({
+    for(i in 1:length(grs)){
+      nam = names(grs)[i]
+      elementMetadata(base_gr)[[nam]] = F
+      olaps = findOverlaps(base_gr, grs[[i]])
+      elementMetadata(base_gr)[[nam]][queryHits(olaps)] = T
+    }
+    base_gr$group = "no_hit"
+    for(i in rev(1:length(grs))){
+      i_gr = grs[[i]]
+      olaps = findOverlaps(base_gr, i_gr)
+      base_gr[queryHits(olaps)]$group = names(grs)  [i]
+    }
+  })
   return(base_gr)
 }
 
