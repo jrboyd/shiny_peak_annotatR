@@ -2,5 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
-peak_gr.save
+*.save
 shiny-examples

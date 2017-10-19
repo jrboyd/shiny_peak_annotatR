@@ -114,7 +114,7 @@ shinyServer(function(input, output, session) {
   observeEvent(peak_prev_name(), {
     new_val =  peak_prev_name()
     if(is.null(new_val)) new_val = ""
-    print(paste('update:', new_val))
+    # print(paste('update:', new_val))
     updateTextInput(session, "TxtFileName", value = new_val)
   })
   
@@ -173,8 +173,11 @@ shinyServer(function(input, output, session) {
   })
   
   output$NumericMergeExtensionOut = renderUI({
-    if(!is.null(input$SliderMergeExtension))
+    if(!is.null(input$SliderMergeExtension)){
       num = input$SliderMergeExtension
+    }else{
+      num = 0
+    }
     numericInput(inputId = "NumericMergeExtension", label = "", min = 0, max = Inf, value = num)
   })
   
@@ -203,7 +206,7 @@ shinyServer(function(input, output, session) {
   peak_dfr = reactive({
     if(is.null(peak_prev_file())) return(NULL)
     if(peak_prev_file() == "") return(NULL)
-    load_peak_wValidation(peak_prev_file())
+    load_peak_wValidation(peak_prev_file(), with_notes = T)
   })
   
   output$peaksHeader = DT::renderDataTable({
@@ -236,10 +239,10 @@ shinyServer(function(input, output, session) {
     peak_dirs = dir("/slipstream/galaxy/uploads/working/qc_framework/output_drugs_with_merged_inputs/", pattern = "MCF7_bza.+pooled", full.names = T)
     peak_files = sapply(peak_dirs[!grepl("_input_", peak_dirs)], function(d){dir(d, pattern = "peaks_passIDR", full.names = T)})
     names(peak_files) = sapply(strsplit(basename(peak_files), "_"), function(x)paste(x[1:3], collapse = "_"))
-    peak_gr = lapply(peak_files, load_peak_wValidation)
-    for(i in 1:length(peak_gr)){
+    peak_df = lapply(peak_files, load_peak_wValidation)
+    for(i in 1:length(peak_df)){
       tmp = peak_files()
-      tmp[[names(peak_gr)[i]]] = peak_gr[[i]]
+      tmp[[names(peak_df)[i]]] = peak_df[[i]]
       peak_files(tmp)
     }
     
@@ -247,7 +250,7 @@ shinyServer(function(input, output, session) {
     output$SetChooser = renderUI({
       pfl = sets$left
       #add to active
-      pfr = unique(c(sets$right, names(peak_gr)))
+      pfr = unique(c(sets$right, names(peak_df)))
       
       # print(pf)
       return(chooserInput(inputId = "ChooseIntervalSets", 
@@ -260,26 +263,16 @@ shinyServer(function(input, output, session) {
   
   gr_to_plot = reactiveVal(label = "gr_to_plot")
   
-  # observeEvent(input$BtnAnalyze, handlerExpr = {
-  #   print(input$StrategyRadio)
-  #   to_anlayze = input$ChooseIntervalSets$right
-  #   names(to_anlayze) = to_anlayze
-  #   peak_df = peak_files()
-  #   peak_df = peak_df[to_anlayze]
-  #   peak_gr = lapply(peak_df, GRanges)
-  #   print(names(peak_gr))
-  #   gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
-  # })
-  # 
-  
   #insulate other elements from needless updates when ChooseIntervalSets not really updated
   observeEvent(input$ChooseIntervalSets, {
     new_anlayze = input$ChooseIntervalSets$right
     names(new_anlayze) = new_anlayze
     was_analyze = to_analyze()
     if(length(was_analyze) != length(new_anlayze)){
+      print("update anlaysis")
       to_analyze(new_anlayze)
     }else if(!all(was_analyze == new_anlayze)){
+      print("update anlaysis")
       to_analyze(new_anlayze)
     }
     
@@ -287,48 +280,81 @@ shinyServer(function(input, output, session) {
   
   to_analyze = reactiveVal(character())
   
-  output$AnalysisPlot = renderPlot({
-    if(is.null(input$NumericMergeExtension) || 
-       is.null(isolate(input$ChooseIntervalSets))) return(NULL)
-    if(length(isolate(input$ChooseIntervalSets$right)) == 0) return(NULL)
-    # print(input$StrategyRadio)
-    to_analyze_ = to_analyze()
-    names(to_analyze_) = to_analyze_
-    peak_df = peak_files()
-    peak_df = peak_df[to_analyze_]
-    peak_gr = lapply(peak_df, GRanges)
-    
-    print(names(peak_gr))
-    gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
-    if(is.null(gr_to_plot())) return(NULL)
-    gr = gr_to_plot()
-    nam = names(peak_files())
-    df = as.data.frame(elementMetadata(gr))
-    tp = which(colnames(df) != "group")
-    input$StrategyRadio
-    switch(input$RadioPlotType,
-           "pie" = {
-             print("plot: pie")
-             pie(table(gr$group))
-           },
-           "venn" = {
-             print("plot: venn")
-             limma::vennDiagram(df[,tp])
-           },
-           "heatmap" = {  
-             print("plot: heatmap")
-             mat = ifelse(as.matrix(df[,tp]), 1, 0)
-             mat = mat + runif(length(mat), min = -.02, .02)
-             require(gplots)
-             if(ncol(mat) < 2){
-               plot(0:1, 0:1)
-               text(.5, .5, "not enough sets for heatmap")
-             }else{
-               heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
-             }
-             
-           })
+  # observe(x = {
+  #   to_analyze()
+  #   input$StrategyRadio
+  #   input$NumericMergeExtension
+  #   gr_to_plot()
+  #   peak_files()
+  #   input$RadioPlotType
+  #   showNotification("bwabwa")
+  #   
+  # })
+  
+  observeEvent(
+    {
+      #reactive dependencies
+      to_analyze()
+      input$StrategyRadio
+      input$NumericMergeExtension
+    }, {
+      #prereqs
+      if(length(to_analyze()) < 1) return(NULL)
+      if(is.null(input$StrategyRadio)) return(NULL)
+      if(is.null(input$NumericMergeExtension)) return(NULL)
+      #body
+      to_analyze_ = to_analyze()
+      names(to_analyze_) = to_analyze_
+      peak_df = peak_files()
+      peak_df = peak_df[to_analyze_]
+      peak_gr = lapply(peak_df, GRanges)
+      print(names(peak_gr))
+      showNotification("update gr_to_plot")
+      gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
+    })
+  
+  observeEvent({
+    gr_to_plot()
+    input$RadioPlotType
+  }, {
+    output$AnalysisPlot = renderPlot({
+      print("try analysis render")
+      if(is.null(input$NumericMergeExtension) || 
+         is.null(input$ChooseIntervalSets)) return(NULL)
+      if(length(input$ChooseIntervalSets$right) == 0) return(NULL)
+      # print(input$StrategyRadio)
+      if(is.null(gr_to_plot())) return(NULL)
+      gr = gr_to_plot()
+      nam = names(peak_files())
+      df = as.data.frame(elementMetadata(gr))
+      tp = which(colnames(df) != "group")
+      print("plot analysis render")
+      showNotification("update plot")
+      switch(input$RadioPlotType,
+             "pie" = {
+               print("plot: pie")
+               pie(table(gr$group))
+             },
+             "venn" = {
+               print("plot: venn")
+               limma::vennDiagram(df[,tp])
+             },
+             "heatmap" = {  
+               print("plot: heatmap")
+               mat = ifelse(as.matrix(df[,tp]), 1, 0)
+               mat = mat + runif(length(mat), min = -.02, .02)
+               require(gplots)
+               if(ncol(mat) < 2){
+                 plot(0:1, 0:1)
+                 text(.5, .5, "not enough sets for heatmap")
+               }else{
+                 heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
+               }
+               
+             })
+    })
   })
+  
   
   observeEvent(input$FilesSaveResults, {
     if(is.null(input$FilesSaveResults)) return(NULL)
