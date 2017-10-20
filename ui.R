@@ -40,7 +40,7 @@ shinyUI(fluidPage(
     sidebarPanel(width = 4,
                  fixedRow(
                    column(width = 12,
-                          fileInput(inputId = "uploadPeakfile", label = "Browse Local Files"),
+                          fileInput(inputId = "BtnUploadPeakfile", label = "Browse Local Files"),
                           h5("or"),
                           shinyFilesButton(id = "FilesLoadData", label = "Find Files on Server", title = "Find Peaks to Annotate", multiple = F)
                    )
@@ -95,7 +95,7 @@ shinyUI(fluidPage(
                                        choices = c("flat (venn)" = "flat", "serial (pie)" = "serial"))
                    ),
                    column(width = 4,
-                          radioButtons(inputId = "RadioPlotType", label = "Plot Type", choices = c("venn", "pie", "heatmap"))
+                          radioButtons(inputId = "RadioPlotType", label = "Plot Type", choices = c("bars", "pie", "venn", "euler", "heatmap"))
                    ),
                    column(width = 4,
                           sliderInput(inputId = "SliderMergeExtension", label = "Extension", min = 0, max = 5*10^3, value = 0, round = 2, step = 100),
@@ -111,11 +111,12 @@ shinyUI(fluidPage(
                                     HTML(paste("", tags$span(style="color:red", "Strategy is serial: First file will be annotated serially by all others.  Earlier files take precedence over later."), sep = ""))
                                   )),
                  # actionButton("BtnAnalyze", label = "Analyze!"),
-                 actionButton("BtnSaveResults", label = "Download Results"),
-                 shinySaveButton(id = "FilesSaveResults", label = "Save Results", title = "Save Results")
+                 downloadButton(outputId = "BtnDownloadResults", label = "Download Results"),
+                 # hidden(actionButton("BtnSaveResults", label = "Download Results")),
+                 shinySaveButton(id = "FilesSaveResults", label = "Save Results (for inspectR)", title = "Save Results")
     ),
     mainPanel( 
-      plotOutput("AnalysisPlot")
+      plotOutput("AnalysisPlot", width = "400", height = "400")
     )
   )
   

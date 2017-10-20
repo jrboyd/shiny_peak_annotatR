@@ -6,8 +6,10 @@
 #
 
 library(shiny)
+library(shinyjs)
 library(shinyFiles)
 library(GenomicRanges)
+library(ggplot2)
 source("functions_intersect.R")
 
 bed_path = "~/ShinyApps/shiny_peak_data/beds"
@@ -105,10 +107,17 @@ shinyServer(function(input, output, session) {
     peak_prev_name(basename(file_path))
   })
   
-  observeEvent(input$uploadPeakfile, {
-    peak_prev_file(input$uploadPeakfile$datapath)
-    peak_prev_name(input$uploadPeakfile$name)
+  observeEvent(input$BtnUploadPeakfile, {
+    peak_prev_file(input$BtnUploadPeakfile$datapath)
+    peak_prev_name(input$BtnUploadPeakfile$name)
   })
+  
+ output$BtnDownloadResults = downloadHandler(
+   filename = "intersectR.bed",
+   content = function(con){
+     write.table(gr_to_plot(), file = con, sep = "\t", col.names = F, row.names = F, quote = F)
+   }
+ )
   
   #whenever peak_prev_name changes (new file selected or file added/cancelled) update text box.
   observeEvent(peak_prev_name(), {
@@ -318,40 +327,135 @@ shinyServer(function(input, output, session) {
     input$RadioPlotType
   }, {
     output$AnalysisPlot = renderPlot({
-      print("try analysis render")
-      if(is.null(input$NumericMergeExtension) || 
-         is.null(input$ChooseIntervalSets)) return(NULL)
-      if(length(input$ChooseIntervalSets$right) == 0) return(NULL)
-      # print(input$StrategyRadio)
-      if(is.null(gr_to_plot())) return(NULL)
-      gr = gr_to_plot()
-      nam = names(peak_files())
-      df = as.data.frame(elementMetadata(gr))
-      tp = which(colnames(df) != "group")
-      print("plot analysis render")
-      showNotification("update plot")
-      switch(input$RadioPlotType,
-             "pie" = {
-               print("plot: pie")
-               pie(table(gr$group))
-             },
-             "venn" = {
-               print("plot: venn")
-               limma::vennDiagram(df[,tp])
-             },
-             "heatmap" = {  
-               print("plot: heatmap")
-               mat = ifelse(as.matrix(df[,tp]), 1, 0)
-               mat = mat + runif(length(mat), min = -.02, .02)
-               require(gplots)
-               if(ncol(mat) < 2){
-                 plot(0:1, 0:1)
-                 text(.5, .5, "not enough sets for heatmap")
-               }else{
-                 heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
-               }
-               
-             })
+      isolate({
+        print("try analysis render")
+        
+        if(is.null(input$NumericMergeExtension) || 
+           is.null(input$ChooseIntervalSets)) return(NULL)
+        if(length(input$ChooseIntervalSets$right) == 0) return(NULL)
+        if(is.null(gr_to_plot())) return(NULL)
+        
+        gr = gr_to_plot()
+        nam = names(peak_files())
+        df = as.data.frame(elementMetadata(gr))
+        tp = which(colnames(df) != "group")
+        print("plot analysis render")
+        showNotification("update plot", duration = .5)
+        save(gr, df, tp, file = "last_plot.save")
+        if(length(tp) < 2){
+          plot(0:1, 0:1)
+          text(.5, .5, "not enough sets for heatmap")
+          return()
+        }
+       
+        switch(input$RadioPlotType,
+               "bars" = {
+                 print("plot: bars")
+                 hit_counts = colSums(df[,tp])
+                 hit_counts_df = data.frame(count = hit_counts, 
+                                            group = factor(names(hit_counts), levels = names(hit_counts)))
+                 bp1<- ggplot(hit_counts_df, aes(x=group, y=count, fill=group))+
+                   labs(x = "") +
+                   geom_bar(width = 1, stat = "identity") +
+                   guides(fill = "none") + 
+                   theme_bw() +
+                   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5), 
+                         panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
+                 bp1 + annotate("text", y = hit_counts / 2, x = 1:length(hit_counts), label = hit_counts)
+               },
+               "pie" = {
+                 print("plot: pie")
+                 hit_counts = (colSums(df[,tp]))
+                 hit_counts_df = data.frame(count = hit_counts, 
+                                            group = factor(names(hit_counts), levels = names(hit_counts)))
+                 
+                 bp2<- ggplot(hit_counts_df, aes(x="", y=count, fill=(group)))+
+                   labs(x = "") +
+                   geom_bar(width = 1, stat = "identity") +
+                   guides(x = "none") +
+                   theme(axis.text.x = element_blank(), 
+                         panel.background = element_blank(), 
+                         axis.ticks = element_blank()) +
+                   coord_polar("y", start = 0) + scale_y_reverse()
+                 hc = rev(hit_counts) / sum(hit_counts)
+                 hc = c(0, cumsum(hc)[-length(hc)]) + hc / 2
+                 bp2 + annotate(geom = "text", y = hc * sum(hit_counts), x = 1.1, label = rev(hit_counts_df$count))
+               },
+               "venn" = {
+                 print("plot: venn")
+                 gg_color_hue <- function(n) {
+                   hues = seq(15, 375, length = n + 1)
+                   hcl(h = hues, l = 65, c = 100)[1:n]
+                 }
+                 source("jrb_vennDiagram.R")
+                 jrb_venn(df[,tp], circle.col = gg_color_hue(length(tp)), cex = c(.8,1,1), bty = "n", names = "")
+                 legend(x = "top", fill = gg_color_hue(length(tp)), legend = colnames(df)[tp], ncol = 2)
+               },
+               "euler" = {
+                 print("plot: euler")
+                 gg_venneuler(df[,tp])
+               },
+               "heatmap" = {  
+                 print("plot: heatmap")
+                 
+                 # mat = mat + runif(length(mat), min = -.02, .02)
+                 require(gplots)
+                 if(length(tp) < 2){
+                   plot(0:1, 0:1)
+                   text(.5, .5, "not enough sets for heatmap")
+                 }else{
+                   # heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
+                   mat = ifelse(as.matrix(df[,tp]), 1, 0)
+                   for(i in rev(1:ncol(mat))){
+                     mat = mat[order(mat[,i]),]
+                   }
+                   hdt = as.data.table(cbind(mat, row = 1:nrow(mat)))
+                   hdt = melt(hdt, id.vars = "row", variable.name = "groups")
+                   hdt[, rnd := value > .5]
+                   # png('tmp2.png', width = 1200, height = 1200)
+                   require(png)
+                   dmat = as.matrix(dcast(hdt, value.var = "value", formula = rev(row) ~ groups))[,1+1:length(tp)]
+                   dmat = (dmat * -.95 + .95)
+                   # amat = array(dmat, dim = c(nrow(dmat), ncol(dmat), 3) )
+                   # colnames(dmat) = NULL
+                   # rasterImage(dmat)
+                   nr = 1000
+                   nf = floor(nrow(dmat) / nr)
+                   comp_mat = dmat[1:floor(nrow(dmat) / nf)*nf, rep(1:ncol(dmat), each = 20)]
+                   writePNG(comp_mat, target = "tmp.png")
+                   # writePNG(amat, target = "tmp.png")
+                   require(grid)
+                   png_grob = rasterGrob(readPNG("tmp.png"), width = unit(1, "npc"), height = unit(1, "npc"), interpolate = F)
+                   # png_grob = rasterGrob(readPNG(system.file("img", "Rlogo.png", package="png")), width = unit(1, "npc"), height = unit(1, "npc"))
+                   p = ggplot(hdt) + 
+                     geom_tile(aes(x = groups, y = row, fill = NA, col = NULL)) +
+                     scale_fill_manual(values = c("TRUE" = "black", "FALSE" = "#EFEFEF")) +
+                     scale_alpha(0) +
+                     labs(fill = "binding", y = "", title = "Marks per region clustering") +
+                     # theme_bw() +
+                     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5), 
+                          # plot.margin = margin(r = .2, unit = "npc"),
+                           panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), 
+                           plot.background = element_blank(), panel.background = element_blank(), axis.text.y = element_blank(),
+                           axis.ticks.y = element_blank(), axis.ticks.x = element_blank(), 
+                           axis.text = element_text(size = rel(1.5)), 
+                           legend.key.size = unit(.12, units = "npc"),
+                           # legend.key = element_rect(size = unit(.26, units = "npc")), 
+                           legend.text = element_text(size = rel(2)),
+                           legend.title = element_text(size = rel(3)),
+                          
+                           # legend.key.size = element_text(size = rel(2.5)),
+                           axis.title = element_blank()) +
+                     annotation_custom(png_grob, xmin = .5, xmax = ncol(dmat) + .5, ymin = .5, ymax = nrow(dmat)+.5)
+                     # p + annotation_custom(rasterGrob(readPNG("tmp.png")))
+                     # theme_set(base_size = 12)
+                   print(p)
+                   # print("done heatmap")
+                   # dev.off()
+                 }
+                 
+               })
+      })
     })
   })
   

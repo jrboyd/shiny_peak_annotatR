@@ -3,4 +3,6 @@
 .RData
 .Ruserdata
 *.save
+*.pdf
+*.png
 shiny-examples
