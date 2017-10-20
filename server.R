@@ -60,7 +60,7 @@ shinyServer(function(input, output, session) {
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak"))
   roots_output =  c("intersectR" = bed_path, user_roots)
   
-  dir.create(roots_output, showWarnings = F)
+  dir.create(bed_path, showWarnings = F)
   shinyFileSave(input, 'FilesSaveResults', roots= roots_output, filetypes=c("bed"))
   peak_cn = c("seqnames", "start", "end", "id", "score", "strand", "FE", "p-value", "q-value", "summit_pos")
   peak_prev_file = reactiveVal(value = "", label = "peak_prev_file")
