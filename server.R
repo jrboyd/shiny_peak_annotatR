@@ -57,7 +57,8 @@ shinyServer(function(input, output, session) {
   names(qcframework_load) <- basename(qcframework_load)
   roots_load = c(user_roots, qcframework_load)
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak"))
-  roots_output =  c("bed_dir" = bed_path)
+  roots_output =  c("intersectR" = bed_path, user_roots)
+  
   dir.create(roots_output, showWarnings = F)
   shinyFileSave(input, 'FilesSaveResults', roots= roots_output, filetypes=c("bed"))
   peak_cn = c("seqnames", "start", "end", "id", "score", "strand", "FE", "p-value", "q-value", "summit_pos")
