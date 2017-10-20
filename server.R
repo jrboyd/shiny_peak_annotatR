@@ -16,7 +16,7 @@ source("functions_intersect.R")
 source("source_gg_venneuler.R")
 
 bed_path = "~/ShinyApps/shiny_peak_data/beds"
-options(shiny.maxRequestSize=30*1024^2)
+options(shiny.maxRequestSize=50*1024^2)
 
 # Return the UI for a modal dialog with data selection input. If 'failed' is
 # TRUE, then display a message that the previous value was invalid.
