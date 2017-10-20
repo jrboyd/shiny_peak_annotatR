@@ -11,6 +11,7 @@ library(shinyFiles)
 library(GenomicRanges)
 library(ggplot2)
 library(data.table)
+library(magrittr)
 source("functions_intersect.R")
 source("source_gg_venneuler.R")
 
@@ -50,8 +51,11 @@ shinyFiles2save = function(shinyF, roots){
 }
 
 shinyServer(function(input, output, session) {
-  roots_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
-  names(roots_load) <- basename(roots_load)
+  user_roots = dir("/slipstream/home/", full.names = T) %>% dir(. ,pattern = "^ShinyData$", full.names = T)
+  names(user_roots) = dirname(user_roots) %>% basename()
+  qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
+  names(qcframework_load) <- basename(qcframework_load)
+  roots_load = c(user_roots, qcframework_load)
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak"))
   roots_output =  c("bed_dir" = bed_path)
   dir.create(roots_output, showWarnings = F)
