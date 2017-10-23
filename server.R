@@ -57,7 +57,7 @@ shinyServer(function(input, output, session) {
   qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
   names(qcframework_load) <- basename(qcframework_load)
   roots_load = c(user_roots, qcframework_load)
-  shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak"))
+  shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak", "bed", "txt"))
   roots_output =  c("intersectR" = bed_path, user_roots)
   
   dir.create(bed_path, showWarnings = F)
