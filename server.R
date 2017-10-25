@@ -52,7 +52,8 @@ shinyFiles2save = function(shinyF, roots){
 }
 
 shinyServer(function(input, output, session) {
-  user_roots = dir("/slipstream/home/", full.names = T) %>% dir(. ,pattern = "^ShinyData$", full.names = T)
+  user_roots = dir("/slipstream/home/", full.names = T) %>% paste0(. , "/ShinyData")
+  user_roots = subset(user_roots, dir.exists(user_roots))
   names(user_roots) = dirname(user_roots) %>% basename()
   qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
   names(qcframework_load) <- basename(qcframework_load)
