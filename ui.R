@@ -111,7 +111,8 @@ shinyUI(fluidPage(
                                     HTML(paste("", tags$span(style="color:red", "Strategy is serial: First file will be annotated serially by all others.  Earlier files take precedence over later."), sep = ""))
                                   )),
                  # actionButton("BtnAnalyze", label = "Analyze!"),
-                 downloadButton(outputId = "BtnDownloadResults", label = "Download Results"),
+                 downloadButton(outputId = "DownloadResults", label = "Download Results"),
+                 downloadButton(outputId = "DownloadPlot", label = "Download Plot"),
                  # hidden(actionButton("BtnSaveResults", label = "Download Results")),
                  shinySaveButton(id = "FilesSaveResults", label = "Save Results (for inspectR)", title = "Save Results")
     ),
