@@ -59,14 +59,9 @@ shinyUI(fluidPage(
                           actionButton(inputId = "BtnCancelFile", label = "Cancel")
                    )
                  )#,
-                 # uiOutput("peaksFilter")
     ),
-    
-    # Show a plot of the generated distribution
     mainPanel(
-      DT::dataTableOutput("peaksHeader")
-      
-      # plotOutput("distPlot")
+      DT::dataTableOutput("DTPeaksHeader")
     )
   ),
   br("step2 - organize"),
@@ -76,14 +71,13 @@ shinyUI(fluidPage(
     ),
     column(width = 4,
            actionButton("BtnDeleteSet", label = "Delete"),
-           # fixedRow(
-           # column(width = 9,
-           # textInput("TxtRenameSet", label = ""),
-           # ),
-           # column(width = 3,
-           actionButton("BtnRenameSet", label = "Rename")
-           # )
-           # )
+           actionButton("BtnRenameSet", label = "Rename"),
+           actionButton("BtnFilterSet", label = "Filter")#,
+           # bsModal(id = "ModalFilter", 
+           #         title = "Filter", 
+           #         trigger = "BtnFilterSet", 
+           #         DT::dataTableOutput(outputId = "DTPeakSFilter"))
+           
     )
   ),
   br("step3 - analyze"),

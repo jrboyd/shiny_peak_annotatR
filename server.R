@@ -38,6 +38,25 @@ dataModal <- function(sets, failed = FALSE) {
   )
 }
 
+filterModal <- function(failed = FALSE) {
+  #unneccessarily complicated for single selection mode but not touching cause it works
+  modalDialog(
+    span('(Please filter the selected sample)'),
+    DT::dataTableOutput("DTPeaksFilter", width = "auto"),
+    if (failed)
+      div(tags$b("Hey man, this didn't work! Not sure why.", style = "color: red;")),
+    
+    footer = tagList(
+      modalButton("Cancel"),
+      actionButton("BtnConfirmFilter", "Confirm")
+    ),
+    size = "l",
+    title = "Filtering"
+  )
+}
+
+
+
 shinyFiles2load = function(shinyF, roots){
   root_path = roots[shinyF$root]
   rel_path = paste0(unlist(shinyF$files), collapse = "/")
@@ -79,13 +98,18 @@ shinyServer(function(input, output, session) {
   observeEvent(input$BtnAddFile, {
     if(is.null(peak_dfr())) return(NULL)
     tmp = peak_files()
-    tmp[[input$TxtFileName]] = peak_dfr()
+    name_in_list = input$TxtFileName
+    if(any(names(tmp) == name_in_list)){
+      n = sum(grepl(name_in_list, names(tmp), fixed = T))
+      name_in_list = paste0(name_in_list, "(", n, ")")
+    }
+    tmp[[name_in_list]] = peak_dfr()[input$peaksHeader_rows_all,]
     peak_files(tmp)
     sets = input$ChooseIntervalSets
     output$SetChooser = renderUI({
       pfl = sets$left
       #add to active
-      pfr = c(sets$right, isolate(input$TxtFileName))
+      pfr = c(sets$right, name_in_list)
       
       # print(pf)
       return(chooserInput(inputId = "ChooseIntervalSets", 
@@ -190,6 +214,14 @@ shinyServer(function(input, output, session) {
     # print(sets)
     showModal(dataModal(sets = sets))
   })
+  observeEvent(input$BtnFilterSet, {
+    if(length(input$ChooseIntervalSets$selected) != 1){
+      showNotification("No data selected.", type = "error")
+      return()
+    }
+    showModal(filterModal())
+  })
+  
   
   # When OK button is pressed, attempt to load the data set. If successful,
   # remove the modal. If not show another modal, but this time with a failure
@@ -200,10 +232,13 @@ shinyServer(function(input, output, session) {
     new_name = input$TxtRename
     print(paste("rename", old_name, "-->", new_name))
     if(old_name == new_name){
+      #if no change, that's fine
       removeModal()
     }else if(any(c(unique(c(sets$left, sets$right)) == new_name))){
-      showModal(dataModal(failed = TRUE))
+      #if duplicated name, go to failure
+      showModal(dataModal(sets, failed = TRUE))
     }else{
+      #do the renaming and update stuff
       tmp = peak_files()
       names(tmp)[names(tmp) == old_name] = new_name
       peak_files(tmp)
@@ -259,7 +294,7 @@ shinyServer(function(input, output, session) {
     load_peak_wValidation(peak_prev_file(), with_notes = T)
   })
   
-  output$peaksHeader = DT::renderDataTable({
+  output$DTPeaksHeader = DT::renderDataTable({
     if(is.null(peak_dfr())){
       m = matrix(0, ncol = length(peak_cn), nrow = 0)
       colnames(m) = peak_cn
@@ -271,6 +306,17 @@ shinyServer(function(input, output, session) {
                   filter = list(position = "top", clear = TRUE, plain = F),
                   options = list(
                     pageLength = 5), rownames = F)
+  })
+  
+  output$DTPeaksFilter = DT::renderDataTable({
+    
+    df = peak_files()[[input$ChooseIntervalSets$selected]]
+    # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+    DT::datatable(df, 
+                  filter = list(position = "top", clear = TRUE, plain = F),
+                  options = list(
+                    scrollX = T,
+                    pageLength = 10), rownames = F)
   })
   
   observeEvent(input$BtnQuickFlat, handlerExpr = {
@@ -295,8 +341,6 @@ shinyServer(function(input, output, session) {
                           leftLabel = "Ready", rightLabel = "For Analysis", 
                           leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
     })
-    # peak_prev_file(NULL)
-    # peak_prev_name(NULL)
   })
   
   gr_to_plot = reactiveVal(label = "gr_to_plot")
