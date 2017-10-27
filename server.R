@@ -14,6 +14,7 @@ library(data.table)
 library(magrittr)
 source("functions_intersect.R")
 source("source_gg_venneuler.R")
+source("jrb_gg_vennDiagram.R")
 
 bed_path = "~/ShinyApps/shiny_peak_data/beds"
 options(shiny.maxRequestSize=50*1024^2)
