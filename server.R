@@ -4,107 +4,41 @@
 #
 # http://shiny.rstudio.com
 #
-
-library(shiny)
-library(shinyjs)
-library(shinyFiles)
-library(GenomicRanges)
-library(ggplot2)
-library(data.table)
-library(magrittr)
-source("functions_intersect.R")
-source("source_gg_venneuler.R")
-source("jrb_gg_vennDiagram.R")
-
-bed_path = "~/ShinyApps/shiny_peak_data/beds"
-options(shiny.maxRequestSize=50*1024^2)
-
-# Return the UI for a modal dialog with data selection input. If 'failed' is
-# TRUE, then display a message that the previous value was invalid.
-dataModal <- function(sets, failed = FALSE) {
-  sets_html = HTML(paste(sapply(sets$selected[1], function(x){
-    as.character(textInput("TxtRename", label = paste("rename", x), value = x))
-  }), collapse = "\n"))
-  modalDialog(
-    sets_html,
-    span('(Please rename the selected sample)'),
-    if (failed)
-      div(tags$b("One or more names no longer unique!", style = "color: red;")),
-    
-    footer = tagList(
-      modalButton("Cancel"),
-      actionButton("BtnConfirmRename", "Confirm")
-    )
-  )
-}
-
-filterModal <- function(failed = FALSE) {
-  #unneccessarily complicated for single selection mode but not touching cause it works
-  modalDialog(
-    span('(Please filter the selected sample)'),
-    DT::dataTableOutput("DTPeaksFilter", width = "auto"),
-    if (failed)
-      div(tags$b("Hey man, this didn't work! Not sure why.", style = "color: red;")),
-    
-    footer = tagList(
-      modalButton("Cancel"),
-      actionButton("BtnConfirmFilter", "Confirm")
-    ),
-    size = "l",
-    title = "Filtering"
-  )
-}
-
-
-
-shinyFiles2load = function(shinyF, roots){
-  root_path = roots[shinyF$root]
-  rel_path = paste0(unlist(shinyF$files), collapse = "/")
-  file_path = paste0(root_path, "/", rel_path)
-  return(file_path)
-}
-
-shinyFiles2save = function(shinyF, roots){
-  root_path = roots[shinyF$root]
-  rel_path = paste0(unlist(shinyF$name), collapse = "/")
-  file_path = paste0(root_path, "/", rel_path)
-  return(file_path)
-}
-
-gg_color_hue <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
+source('server_setup.R')
 
 shinyServer(function(input, output, session) {
-  user_roots = dir("/slipstream/home/", full.names = T) %>% paste0(. , "/ShinyData")
-  user_roots = subset(user_roots, dir.exists(user_roots))
-  names(user_roots) = dirname(user_roots) %>% basename()
-  qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
-  names(qcframework_load) <- basename(qcframework_load)
-  roots_load = c(user_roots, qcframework_load)
+  #ShinyFile initialization
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak", "bed", "txt"))
-  roots_output =  c("intersectR" = bed_path, user_roots)
-  
-  dir.create(bed_path, showWarnings = F)
   shinyFileSave(input, 'FilesSaveResults', roots= roots_output, filetypes=c("bed"))
-  peak_cn = c("seqnames", "start", "end", "id", "score", "strand", "FE", "p-value", "q-value", "summit_pos")
-  peak_prev_file = reactiveVal(value = "", label = "peak_prev_file")
-  peak_prev_name = reactiveVal(value = "", label = "peak_prev_name")
-  #stores all set data, keyed by set_id
-  peak_files = reactiveVal(value = list(), label = "peak_files")
-  #stores the order of peak_files as well as any updated names
+  
+  #Set Preview reactives
+  PreviewSet_Filepath = reactiveVal(value = "", label = "PreviewSet_Filepath")
+  PreviewSet_Name = reactiveVal(value = "", label = "PreviewSet_Name")
+  PreviewSet_DataFrame = reactive({
+    if(is.null(PreviewSet_Filepath())) return(NULL)
+    if(PreviewSet_Filepath() == "") return(NULL)
+    load_peak_wValidation(PreviewSet_Filepath(), with_notes = T)
+  })
+  
+  #Set Organization of Loaded reactives
+  SetsLoaded_Selected = reactiveVal(value = character(), label = "SetsLoaded_Selected")
+  SetsLoaded_DataFrames = reactiveVal(value = list(), label = "SetsLoaded_DataFrames")
+  SetsLoaded_FilePaths = reactiveVal(value = list(), label = "SetsLoaded_FilePaths")
+  
   
   observeEvent(input$BtnAddFile, {
-    if(is.null(peak_dfr())) return(NULL)
-    tmp = peak_files()
+    if(is.null(PreviewSet_DataFrame())) return(NULL)
+    tmp = SetsLoaded_DataFrames()
+    tmp2 = SetsLoaded_FilePaths()
     name_in_list = input$TxtFileName
     if(any(names(tmp) == name_in_list)){
       n = sum(grepl(name_in_list, names(tmp), fixed = T))
       name_in_list = paste0(name_in_list, "(", n, ")")
     }
-    tmp[[name_in_list]] = peak_dfr()[input$peaksHeader_rows_all,]
-    peak_files(tmp)
+    tmp[[name_in_list]] = PreviewSet_DataFrame()[input$peaksHeader_rows_all,]
+    tmp2[[name_in_list]] = PreviewSet_Filepath()
+    SetsLoaded_DataFrames(tmp)
+    SetsLoaded_FilePaths(tmp2)
     sets = input$ChooseIntervalSets
     output$SetChooser = renderUI({
       pfl = sets$left
@@ -116,12 +50,12 @@ shinyServer(function(input, output, session) {
                           leftLabel = "Ready", rightLabel = "For Analysis", 
                           leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
     })
-    peak_prev_file("")
-    peak_prev_name("")
+    PreviewSet_Filepath("")
+    PreviewSet_Name("")
   })
   
-  observeEvent(peak_files, {
-    if(length(peak_files()) == 0){
+  observeEvent(SetsLoaded_DataFrames(), {
+    if(length(SetsLoaded_DataFrames()) == 0){
       output$SetChooser = renderUI({
         pfl = character()
         #add to active
@@ -136,19 +70,19 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$BtnCancelFile, {
-    peak_prev_file("")
-    peak_prev_name("")
+    PreviewSet_Filepath("")
+    PreviewSet_Name("")
   })
   
   observeEvent(input$FilesLoadData, {
     file_path = shinyFiles2load(input$FilesLoadData, roots_load)
-    peak_prev_file(file_path)
-    peak_prev_name(basename(file_path))
+    PreviewSet_Filepath(file_path)
+    PreviewSet_Name(basename(file_path))
   })
   
   observeEvent(input$BtnUploadPeakfile, {
-    peak_prev_file(input$BtnUploadPeakfile$datapath)
-    peak_prev_name(input$BtnUploadPeakfile$name)
+    PreviewSet_Filepath(input$BtnUploadPeakfile$datapath)
+    PreviewSet_Name(input$BtnUploadPeakfile$name)
   })
   
   output$DownloadResults = downloadHandler(
@@ -184,13 +118,41 @@ shinyServer(function(input, output, session) {
   #   }
   # })
   
-  #whenever peak_prev_name changes (new file selected or file added/cancelled) update text box.
-  observeEvent(peak_prev_name(), {
-    new_val =  peak_prev_name()
+  #whenever PreviewSet_Name changes (new file selected or file added/cancelled) update text box.
+  observeEvent(PreviewSet_Name(), {
+    new_val =  PreviewSet_Name()
     if(is.null(new_val)) new_val = ""
     # print(paste('update:', new_val))
     updateTextInput(session, "TxtFileName", value = new_val)
   })
+  
+  #keep setsloaded and such updatd
+  observeEvent(
+    eventExpr = input$ChooseIntervalSets, 
+    handlerExpr = {
+      sets = input$ChooseIntervalSets
+      active = sets$right
+      selected = paste("selected:", sets$selected)
+      file_paths =  SetsLoaded_FilePaths()
+      data_frames = SetsLoaded_DataFrames()
+      if(length(active) > 0){
+        active_list = sapply(1:length(active), function(i){
+          paste0("\t", i, ") ", active[i], ": ", nrow(data_frames[[active[i]]]))
+        })
+      }else{
+        active_list = character()
+      }
+      str = paste(sep = "\n",
+                  "---Selection Debug Info---",
+                  selected, 
+                  "active sets:",
+                  paste(active_list, collapse = "\n"))
+      # showNotification(
+      output$DebugTxt = renderText({
+        return(str)
+      })
+      # )
+    })
   
   observeEvent(input$BtnDeleteSet, {
     sets = input$ChooseIntervalSets
@@ -221,7 +183,9 @@ shinyServer(function(input, output, session) {
     }
     showModal(filterModal())
   })
-  
+  observeEvent(input$BtnConfirmFilter, {
+    showNotification("Confirm filter.", type = "message")
+  })
   
   # When OK button is pressed, attempt to load the data set. If successful,
   # remove the modal. If not show another modal, but this time with a failure
@@ -239,9 +203,9 @@ shinyServer(function(input, output, session) {
       showModal(dataModal(sets, failed = TRUE))
     }else{
       #do the renaming and update stuff
-      tmp = peak_files()
+      tmp = SetsLoaded_DataFrames()
       names(tmp)[names(tmp) == old_name] = new_name
-      peak_files(tmp)
+      SetsLoaded_DataFrames(tmp)
       
       
       sets$left[sets$left == old_name] = new_name
@@ -266,41 +230,17 @@ shinyServer(function(input, output, session) {
     numericInput(inputId = "NumericMergeExtension", label = "", min = 0, max = Inf, value = num)
   })
   
-  load_peak_wValidation = function(peak_file, with_notes = F){
-    df = read.table(peak_file, stringsAsFactors = F)
-    if(ncol(df) == length(peak_cn)){
-      if(with_notes){
-        showNotification("assuming file is narrowPeak.", type = "warning")
-      }else{
-        print("assuming file is narrowPeak.")
-      }
-      colnames(df) = peak_cn  
-    }else{
-      if(with_notes){
-        showNotification("file not narrowPeak, loading as minimal bed file.", type = "warning")
-      }else{
-        print("file not narrowPeak, loading as minimal bed file.")
-      }
-      bed_cn = peak_cn[1:4]
-      nc = min(ncol(df), length(bed_cn))
-      colnames(df)[1:nc] = peak_cn[1:nc]
-    }
-    return(df)
-  }
   
-  peak_dfr = reactive({
-    if(is.null(peak_prev_file())) return(NULL)
-    if(peak_prev_file() == "") return(NULL)
-    load_peak_wValidation(peak_prev_file(), with_notes = T)
-  })
+  
+
   
   output$DTPeaksHeader = DT::renderDataTable({
-    if(is.null(peak_dfr())){
+    if(is.null(PreviewSet_DataFrame())){
       m = matrix(0, ncol = length(peak_cn), nrow = 0)
       colnames(m) = peak_cn
       return(as.data.frame(m))
     }
-    df = peak_dfr()
+    df = PreviewSet_DataFrame()
     # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
     DT::datatable(df, 
                   filter = list(position = "top", clear = TRUE, plain = F),
@@ -310,7 +250,7 @@ shinyServer(function(input, output, session) {
   
   output$DTPeaksFilter = DT::renderDataTable({
     
-    df = peak_files()[[input$ChooseIntervalSets$selected]]
+    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
     # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
     DT::datatable(df, 
                   filter = list(position = "top", clear = TRUE, plain = F),
@@ -325,9 +265,9 @@ shinyServer(function(input, output, session) {
     names(peak_files) = sapply(strsplit(basename(peak_files), "_"), function(x)paste(x[1:3], collapse = "_"))
     peak_df = lapply(peak_files, load_peak_wValidation)
     for(i in 1:length(peak_df)){
-      tmp = peak_files()
+      tmp = SetsLoaded_DataFrames()
       tmp[[names(peak_df)[i]]] = peak_df[[i]]
-      peak_files(tmp)
+      SetsLoaded_DataFrames(tmp)
     }
     
     sets = input$ChooseIntervalSets
@@ -367,7 +307,7 @@ shinyServer(function(input, output, session) {
   #   input$StrategyRadio
   #   input$NumericMergeExtension
   #   gr_to_plot()
-  #   peak_files()
+  #   SetsLoaded_DataFrames()
   #   input$RadioPlotType
   #   showNotification("bwabwa")
   #   
@@ -387,7 +327,7 @@ shinyServer(function(input, output, session) {
       #body
       to_analyze_ = to_analyze()
       names(to_analyze_) = to_analyze_
-      peak_df = peak_files()
+      peak_df = SetsLoaded_DataFrames()
       peak_df = peak_df[to_analyze_]
       peak_gr = lapply(peak_df, GRanges)
       print(names(peak_gr))
@@ -425,7 +365,7 @@ shinyServer(function(input, output, session) {
     if(is.null(gr_to_plot())) return(NULL)
     
     gr = gr_to_plot()
-    nam = names(peak_files())
+    nam = names(SetsLoaded_DataFrames())
     df = as.data.frame(elementMetadata(gr))
     tp = which(colnames(df) != "group")
     print("plot analysis render")
@@ -503,7 +443,6 @@ shinyServer(function(input, output, session) {
                text(.5, .5, "not enough sets for heatmap")
                p = NULL
              }else{
-               # heatmap.2(mat[sample(nrow(mat), 2000),, drop = F]+.2, col = c("white", "black"), trace = "n")  
                mat = ifelse(as.matrix(df[,tp, drop = F]), 1, 0)
                for(i in rev(1:ncol(mat))){
                  mat = mat[order(mat[,i]), , drop = F]
@@ -511,54 +450,34 @@ shinyServer(function(input, output, session) {
                hdt = as.data.table(cbind(mat, row = 1:nrow(mat)))
                hdt = melt(hdt, id.vars = "row", variable.name = "groups")
                hdt[, rnd := value > .5]
-               # png('tmp2.png', width = 1200, height = 1200)
                require(png)
                dmat = as.matrix(dcast(hdt, value.var = "value", formula = rev(row) ~ groups))[,1+1:length(tp), drop = F]
                dmat = (dmat * -.95 + .95)
-               # amat = array(dmat, dim = c(nrow(dmat), ncol(dmat), 3) )
-               # colnames(dmat) = NULL
-               # rasterImage(dmat)
                nr = 1000
                nf = floor(nrow(dmat) / nr)
                comp_mat = dmat[1:floor(nrow(dmat) / nf)*nf, rep(1:ncol(dmat), each = 20)]
                writePNG(comp_mat, target = "tmp.png")
-               # writePNG(amat, target = "tmp.png")
                require(grid)
                png_grob = rasterGrob(readPNG("tmp.png"), width = unit(1, "npc"), height = unit(1, "npc"), interpolate = F)
-               # png_grob = rasterGrob(readPNG(system.file("img", "Rlogo.png", package="png")), width = unit(1, "npc"), height = unit(1, "npc"))
                p = ggplot(hdt) + 
                  geom_tile(aes(x = groups, y = row, fill = NA, col = NULL)) +
                  scale_fill_manual(values = c("TRUE" = "black", "FALSE" = "#EFEFEF")) +
                  scale_alpha(0) +
                  labs(fill = "binding", y = "", title = "Marks per region clustering") +
-                 # theme_bw() +
                  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5), 
-                       # plot.margin = margin(r = .2, unit = "npc"),
                        panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), 
                        plot.background = element_blank(), panel.background = element_blank(), axis.text.y = element_blank(),
                        axis.ticks.y = element_blank(), axis.ticks.x = element_blank(), 
                        axis.text = element_text(size = rel(1.5)), 
                        legend.key.size = unit(.12, units = "npc"),
-                       # legend.key = element_rect(size = unit(.26, units = "npc")), 
                        legend.text = element_text(size = rel(2)),
                        legend.title = element_text(size = rel(3)),
-                       
-                       # legend.key.size = element_text(size = rel(2.5)),
                        axis.title = element_blank()) +
                  annotation_custom(png_grob, xmin = .5, xmax = ncol(dmat) + .5, ymin = .5, ymax = nrow(dmat)+.5)
-               # p + annotation_custom(rasterGrob(readPNG("tmp.png")))
-               # theme_set(base_size = 12)
-               # print(p)
-               # print("done heatmap")
-               # dev.off()
              }
-             
            })
     last_plot(p)
   })
-  # })
-  
-  
   
   observeEvent(input$FilesSaveResults, {
     if(is.null(input$FilesSaveResults)) return(NULL)

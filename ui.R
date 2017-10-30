@@ -113,8 +113,9 @@ shinyUI(fluidPage(
     mainPanel( 
       plotOutput("AnalysisPlot", width = "400", height = "400")
     )
-  )
-  
+    
+  ),
+  verbatimTextOutput("DebugTxt", placeholder = T)
   # todoListInput("ListOrganize", leftLabel = "My cool stuff", rightLabel = "b", leftChoices = 1:3, rightChoices = 0)
 )
 )
