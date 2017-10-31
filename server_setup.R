@@ -34,7 +34,6 @@ dataModal <- function(sets, failed = FALSE) {
 }
 
 filterModal <- function(failed = FALSE) {
-  #unneccessarily complicated for single selection mode but not touching cause it works
   modalDialog(
     span('(Please filter the selected sample)'),
     DT::dataTableOutput("DTPeaksFilter", width = "auto"),
@@ -42,6 +41,8 @@ filterModal <- function(failed = FALSE) {
       div(tags$b("Hey man, this didn't work! Not sure why.", style = "color: red;")),
     
     footer = tagList(
+      uiOutput("DTPeaksFilterElements"),
+      # actionButton("BtnFilterByNumber", label = "Truncate"),
       modalButton("Cancel"),
       actionButton("BtnConfirmFilter", "Confirm")
     ),
