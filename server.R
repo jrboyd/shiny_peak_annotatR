@@ -35,7 +35,7 @@ shinyServer(function(input, output, session) {
       n = sum(grepl(name_in_list, names(tmp), fixed = T))
       name_in_list = paste0(name_in_list, "(", n, ")")
     }
-    tmp[[name_in_list]] = PreviewSet_DataFrame()[input$DTPeaksHeader_rows_all,]
+    tmp[[name_in_list]] = PreviewSet_DataFrame()[input$DTPeaksPreview_rows_all,]
     tmp2[[name_in_list]] = PreviewSet_Filepath()
     SetsLoaded_DataFrames(tmp)
     SetsLoaded_FilePaths(tmp2)
@@ -128,7 +128,10 @@ shinyServer(function(input, output, session) {
   
   #keep setsloaded and such updatd
   observeEvent(
-    eventExpr = input$ChooseIntervalSets, 
+    eventExpr = {
+      input$ChooseIntervalSets
+      SetsLoaded_DataFrames()
+    }, 
     handlerExpr = {
       sets = input$ChooseIntervalSets
       active = sets$right
@@ -186,7 +189,7 @@ shinyServer(function(input, output, session) {
     # print(sets)
     showModal(dataModal(sets = sets))
   })
- #check if rename in modal is valid and if not, relaunch modal with additional error message
+  #check if rename in modal is valid and if not, relaunch modal with additional error message
   observeEvent(input$BtnConfirmRename, {
     sets = input$ChooseIntervalSets
     old_name = sets$selected[1]
@@ -227,10 +230,62 @@ shinyServer(function(input, output, session) {
       showNotification("No data selected.", type = "error")
       return()
     }
+    #dataTable instance used to filter set data after adding
+    output$DTPeaksFilter = DT::renderDataTable({
+      
+      df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
+      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+      DT::datatable(df, 
+                    filter = list(position = "top", clear = TRUE, plain = F),
+                    options = list(
+                      scrollX = T,
+                      pageLength = 10), rownames = F)
+    })
     showModal(filterModal())
   })
+  
+  output$DTPeaksFilterElements = renderUI({
+    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
+    tagList(
+      numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
+      actionButton("BtnFilterByNumber", label = "Truncate"),
+      actionButton("BtnFilterReloadFile", label = "Reload File")
+    )
+  })
+  observeEvent(input$BtnFilterByNumber, {
+    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]][input$DTPeaksFilter_rows_all[1:input$NumFilterNumberOfRegions],]
+    
+    output$DTPeaksFilter = DT::renderDataTable({
+      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+      DT::datatable(df, 
+                    filter = list(position = "top", clear = TRUE, plain = F),
+                    options = list(
+                      scrollX = T,
+                      pageLength = 10), rownames = F)
+    })
+    
+  })
+  observeEvent(input$BtnFilterReloadFile, {
+    filepath = SetsLoaded_FilePaths()[[input$ChooseIntervalSets$selected]]
+    df = load_peak_wValidation(filepath)
+    
+    output$DTPeaksFilter = DT::renderDataTable({
+      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+      DT::datatable(df, 
+                    filter = list(position = "top", clear = TRUE, plain = F),
+                    options = list(
+                      scrollX = T,
+                      pageLength = 10), rownames = F)
+    })
+  })
   observeEvent(input$BtnConfirmFilter, {
-    showNotification("Confirm filter.", type = "message")
+    tmp = SetsLoaded_DataFrames()
+    df = tmp[[input$ChooseIntervalSets$selected]]
+    tmp[[input$ChooseIntervalSets$selected]] = df[input$DTPeaksFilter_rows_all,]
+    
+    SetsLoaded_DataFrames(tmp)
+    removeModal()
+    # showNotification("Confirm filter.", type = "message")
   })
   
   
@@ -243,9 +298,9 @@ shinyServer(function(input, output, session) {
     }
     numericInput(inputId = "NumericMergeExtension", label = "", min = 0, max = Inf, value = num)
   })
-
+  
   #datatable instance offering preview of data
-  output$DTPeaksHeader = DT::renderDataTable({
+  output$DTPeaksPreview = DT::renderDataTable({
     if(is.null(PreviewSet_DataFrame())){
       m = matrix(0, ncol = length(peak_cn), nrow = 0)
       colnames(m) = peak_cn
@@ -253,22 +308,12 @@ shinyServer(function(input, output, session) {
     }
     df = PreviewSet_DataFrame()
     DT::datatable(df, 
-                  filter = list(position = "top", clear = TRUE, plain = F),
+                  # filter = list(position = "top", clear = TRUE, plain = F),
                   options = list(
                     pageLength = 5), rownames = F)
   })
   
-  #dataTable instance used to filter set data after adding
-  output$DTPeaksFilter = DT::renderDataTable({
-    
-    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
-    # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-    DT::datatable(df, 
-                  filter = list(position = "top", clear = TRUE, plain = F),
-                  options = list(
-                    scrollX = T,
-                    pageLength = 10), rownames = F)
-  })
+  
   
   #Load hardcoded example data 
   observeEvent(input$BtnQuickFlat, handlerExpr = {
@@ -297,24 +342,33 @@ shinyServer(function(input, output, session) {
                           leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
     })
   })
-
+  
   #intersectR is run whenever to_analyze updates  
   to_analyze = reactiveVal(character())
   
   #insulate other elements from needless updates when ChooseIntervalSets not really updated
   #update to_analyze when appropriate
-  observeEvent(input$ChooseIntervalSets, {
-    new_anlayze = input$ChooseIntervalSets$right
-    names(new_anlayze) = new_anlayze
-    was_analyze = to_analyze()
-    if(length(was_analyze) != length(new_anlayze)){
-      print("update anlaysis")
-      to_analyze(new_anlayze)
-    }else if(!all(was_analyze == new_anlayze)){
-      print("update anlaysis")
-      to_analyze(new_anlayze)
+  observeEvent(
+    eventExpr = {
+      input$ChooseIntervalSets
+    }, 
+    handlerExpr = {
+      new_anlayze = input$ChooseIntervalSets$right
+      names(new_anlayze) = new_anlayze
+      was_analyze = to_analyze()
+      if(length(was_analyze) != length(new_anlayze)){
+        print("update anlaysis")
+        to_analyze(new_anlayze)
+      }else if(!all(was_analyze == new_anlayze)){
+        print("update anlaysis")
+        to_analyze(new_anlayze)
+      }
+      
     }
-    
+  )
+  
+  to_analyze_df = reactive({
+    SetsLoaded_DataFrames()[intersect(to_analyze(), names(SetsLoaded_DataFrames()))]
   })
   
   #the results of intersectR.  
@@ -329,7 +383,7 @@ shinyServer(function(input, output, session) {
   observeEvent(
     {
       #reactive dependencies
-      to_analyze()
+      to_analyze_df()
       input$StrategyRadio
       input$NumericMergeExtension
     }, {
@@ -338,13 +392,13 @@ shinyServer(function(input, output, session) {
       if(is.null(input$StrategyRadio)) return(NULL)
       if(is.null(input$NumericMergeExtension)) return(NULL)
       #body
-      to_analyze_ = to_analyze()
-      names(to_analyze_) = to_analyze_
-      peak_df = SetsLoaded_DataFrames()
-      peak_df = peak_df[to_analyze_]
-      peak_gr = lapply(peak_df, GRanges)
+      # to_analyze_ = to_analyze()
+      # names(to_analyze_) = to_analyze_
+      # peak_df = SetsLoaded_DataFrames()
+      # peak_df = peak_df[to_analyze_]
+      peak_gr = lapply(to_analyze_df(), GRanges)
       print(names(peak_gr))
-      gr_to_plot(intersectR(peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
+      gr_to_plot(intersectR(grs = peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
     })
   
   #the last ggplot object plotted.
