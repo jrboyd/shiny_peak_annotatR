@@ -33,23 +33,6 @@ dataModal <- function(sets, failed = FALSE) {
   )
 }
 
-filterModal <- function(failed = FALSE) {
-  modalDialog(
-    span('(Please filter the selected sample)'),
-    DT::dataTableOutput("DTPeaksFilter", width = "auto"),
-    if (failed)
-      div(tags$b("Hey man, this didn't work! Not sure why.", style = "color: red;")),
-    
-    footer = tagList(
-      uiOutput("DTPeaksFilterElements"),
-      # actionButton("BtnFilterByNumber", label = "Truncate"),
-      actionButton("BtnCancelFilter", "Cancel"),
-      actionButton("BtnConfirmFilter", "Confirm")
-    ),
-    size = "l",
-    title = "Filtering"
-  )
-}
 
 
 
@@ -103,3 +86,21 @@ qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", patt
 names(qcframework_load) <- basename(qcframework_load)
 roots_load = c(user_roots, qcframework_load)
 roots_output =  c("intersectR" = bed_path, user_roots)
+
+create_metaDF_empty = function(){
+  df = data.frame(id_name = character(), 
+                  data_frame = I(list()), 
+                  file_path = character(), 
+                  display_name = character(), stringsAsFactors = F)
+  return(df)
+}
+create_metaDF_row = function(id_name, data_frame, file_path, display_name){
+  if(class(data_frame) != "list") data_frame = list(data_frame)
+  df = data.frame(id_name = id_name, 
+                  data_frame = I(data_frame), 
+                  file_path = file_path, 
+                  display_name = display_name, 
+                  stringsAsFactors = F,
+                  row.names = id_name)
+  return(df)
+}

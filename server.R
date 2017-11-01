@@ -22,14 +22,19 @@ shinyServer(function(input, output, session) {
   
   #Set Organization of Loaded reactives
   SetsLoaded_Selected = reactiveVal(value = character(), label = "SetsLoaded_Selected")
+  #deprecate for SetsLoaded_metaDF
   SetsLoaded_DataFrames = reactiveVal(value = list(), label = "SetsLoaded_DataFrames")
   SetsLoaded_FilePaths = reactiveVal(value = list(), label = "SetsLoaded_FilePaths")
+  SetsLoaded_DisplayNames = reactiveVal(value = list(), label = "SetsLoaded_DisplayNames")
+  
+  # SetsLoaded_metaDF = reactiveVal(value = create_metaDF_empty())
   
   
   observeEvent(input$BtnAddFile, {
     if(is.null(PreviewSet_DataFrame())) return(NULL)
     tmp = SetsLoaded_DataFrames()
     tmp2 = SetsLoaded_FilePaths()
+    tmp3 = SetsLoaded_DisplayNames()
     name_in_list = input$TxtFileName
     if(any(names(tmp) == name_in_list)){
       n = sum(grepl(name_in_list, names(tmp), fixed = T))
@@ -37,8 +42,10 @@ shinyServer(function(input, output, session) {
     }
     tmp[[name_in_list]] = PreviewSet_DataFrame()[input$DTPeaksPreview_rows_all,]
     tmp2[[name_in_list]] = PreviewSet_Filepath()
+    tmp3[[name_in_list]] = name_in_list
     SetsLoaded_DataFrames(tmp)
     SetsLoaded_FilePaths(tmp2)
+    SetsLoaded_DisplayNames(tmp3)
     sets = input$ChooseIntervalSets
     output$SetChooser = renderUI({
       pfl = sets$left
@@ -88,7 +95,7 @@ shinyServer(function(input, output, session) {
   output$DownloadResults = downloadHandler(
     filename = "intersectR.bed",
     content = function(con){
-      write.table(gr_to_plot(), file = con, sep = "\t", col.names = F, row.names = F, quote = F)
+      write.table(GRangesToPlot(), file = con, sep = "\t", col.names = F, row.names = F, quote = F)
     }
   )
   output$DownloadPlot = downloadHandler(
@@ -127,6 +134,7 @@ shinyServer(function(input, output, session) {
   })
   
   #keep setsloaded and such updatd
+  #display debug info
   observeEvent(
     eventExpr = {
       input$ChooseIntervalSets
@@ -256,11 +264,11 @@ shinyServer(function(input, output, session) {
     # showNotification("check update DTPeaksFilterElements")
     if(is.null(df)) return(NULL)
     output$DTPeaksFilterElements = renderUI({
-        tagList(
-          numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
-          actionButton("BtnFilterByNumber", label = "Truncate"),
-          actionButton("BtnFilterReloadFile", label = "Reload File")
-        )
+      tagList(
+        numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
+        actionButton("BtnFilterByNumber", label = "Truncate"),
+        actionButton("BtnFilterReloadFile", label = "Reload File")
+      )
     })
   })
   
@@ -358,11 +366,11 @@ shinyServer(function(input, output, session) {
     })
   })
   
-  #intersectR is run whenever to_analyze updates  
-  to_analyze = reactiveVal(character())
+  #intersectR is run whenever SetsToAnalyze_Names updates  
+  SetsToAnalyze_Names = reactiveVal(character())
   
   #insulate other elements from needless updates when ChooseIntervalSets not really updated
-  #update to_analyze when appropriate
+  #update SetsToAnalyze_Names when appropriate
   observeEvent(
     eventExpr = {
       input$ChooseIntervalSets
@@ -370,50 +378,52 @@ shinyServer(function(input, output, session) {
     handlerExpr = {
       new_anlayze = input$ChooseIntervalSets$right
       names(new_anlayze) = new_anlayze
-      was_analyze = to_analyze()
+      was_analyze = SetsToAnalyze_Names()
       if(length(was_analyze) != length(new_anlayze)){
         print("update anlaysis")
-        to_analyze(new_anlayze)
+        SetsToAnalyze_Names(new_anlayze)
       }else if(!all(was_analyze == new_anlayze)){
         print("update anlaysis")
-        to_analyze(new_anlayze)
+        SetsToAnalyze_Names(new_anlayze)
       }
       
     }
   )
-  
-  to_analyze_df = reactive({
-    SetsLoaded_DataFrames()[intersect(to_analyze(), names(SetsLoaded_DataFrames()))]
+  ###THISTHING
+  SetsToAnalyze_DF = reactive({
+    if(length(intersect(SetsToAnalyze_Names(), names(SetsLoaded_DataFrames()))))
+      SetsLoaded_DataFrames()[intersect(SetsToAnalyze_Names(), names(SetsLoaded_DataFrames()))]
   })
   
+  observeEvent(SetsToAnalyze_DF(), {showNotification("SetsToAnalyze_DF updated")})
   #the results of intersectR.  
   #a single GRanges with elementMetadata data frame describing various factors, 
   #typically peak/region intersection.
-  gr_to_plot = reactiveVal(label = "gr_to_plot")
+  GRangesToPlot = reactiveVal(label = "GRangesToPlot")
   
-  #updates gr_to_plot() when appropriate, basically when inputs to intersectR change:
-  #1) when the order or identity of sets changes [to_analyze()]
+  #updates GRangesToPlot() when appropriate, basically when inputs to intersectR change:
+  #1) when the order or identity of sets changes [SetsToAnalyze_Names()]
   #2) when the serial/flat strategy changes
   #3) when the extension size changes
   observeEvent(
     {
       #reactive dependencies
-      to_analyze_df()
+      SetsToAnalyze_DF()
       input$StrategyRadio
       input$NumericMergeExtension
     }, {
       #prereqs
-      if(length(to_analyze()) < 1) return(NULL)
+      if(length(SetsToAnalyze_Names()) < 1) return(NULL)
       if(is.null(input$StrategyRadio)) return(NULL)
       if(is.null(input$NumericMergeExtension)) return(NULL)
       #body
-      # to_analyze_ = to_analyze()
+      # to_analyze_ = SetsToAnalyze_Names()
       # names(to_analyze_) = to_analyze_
       # peak_df = SetsLoaded_DataFrames()
       # peak_df = peak_df[to_analyze_]
-      peak_gr = lapply(to_analyze_df(), GRanges)
+      peak_gr = lapply(SetsToAnalyze_DF(), GRanges)
       print(names(peak_gr))
-      gr_to_plot(intersectR(grs = peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
+      GRangesToPlot(intersectR(grs = peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
     })
   
   #the last ggplot object plotted.
@@ -431,18 +441,18 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  #watches gr_to_plot() and RadioPlotType for changes
+  #watches GRangesToPlot() and RadioPlotType for changes
   observeEvent({
-    gr_to_plot()
+    GRangesToPlot()
     input$RadioPlotType
   }, {
     # showNotification("try analysis plot render")
     if(is.null(input$NumericMergeExtension) || 
        is.null(input$ChooseIntervalSets)) return(NULL)
     if(length(input$ChooseIntervalSets$right) == 0) return(NULL)
-    if(is.null(gr_to_plot())) return(NULL)
+    if(is.null(GRangesToPlot())) return(NULL)
     
-    gr = gr_to_plot()
+    gr = GRangesToPlot()
     nam = names(SetsLoaded_DataFrames())
     df = as.data.frame(elementMetadata(gr))
     tp = which(colnames(df) != "group")
@@ -557,7 +567,7 @@ shinyServer(function(input, output, session) {
     last_plot(p)
   })
   
-  #save the gr_to_plot() to local user's filesystem
+  #save the GRangesToPlot() to local user's filesystem
   observeEvent(input$FilesSaveResults, {
     if(is.null(input$FilesSaveResults)) return(NULL)
     print(input$FilesSaveResults)
@@ -566,6 +576,6 @@ shinyServer(function(input, output, session) {
     if(!grepl(".bed$", file_path)){
       file_path = paste0(file_path, ".bed")
     }
-    write.table(gr_to_plot(), file = file_path, row.names = F, col.names = T, quote = F)
+    write.table(GRangesToPlot(), file = file_path, row.names = F, col.names = T, quote = F)
   })
 })
