@@ -43,7 +43,7 @@ filterModal <- function(failed = FALSE) {
     footer = tagList(
       uiOutput("DTPeaksFilterElements"),
       # actionButton("BtnFilterByNumber", label = "Truncate"),
-      modalButton("Cancel"),
+      actionButton("BtnCancelFilter", "Cancel"),
       actionButton("BtnConfirmFilter", "Confirm")
     ),
     size = "l",

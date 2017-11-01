@@ -224,66 +224,81 @@ shinyServer(function(input, output, session) {
     }
   })
   
+  FilteringDF = reactiveVal(NULL)
   
   observeEvent(input$BtnFilterSet, {
     if(length(input$ChooseIntervalSets$selected) != 1){
-      showNotification("No data selected.", type = "error")
+      showNotification("No data selected in Step 2 right panel.", type = "error")
       return()
     }
     #dataTable instance used to filter set data after adding
-    output$DTPeaksFilter = DT::renderDataTable({
-      
-      df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
-      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-      DT::datatable(df, 
-                    filter = list(position = "top", clear = TRUE, plain = F),
-                    options = list(
-                      scrollX = T,
-                      pageLength = 10), rownames = F)
-    })
+    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
+    FilteringDF(df)
     showModal(filterModal())
   })
-  
-  output$DTPeaksFilterElements = renderUI({
-    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
-    tagList(
-      numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
-      actionButton("BtnFilterByNumber", label = "Truncate"),
-      actionButton("BtnFilterReloadFile", label = "Reload File")
-    )
+  observeEvent(input$BtnCancelFilter, {
+    FilteringDF(NULL)
+    removeModal()
   })
-  observeEvent(input$BtnFilterByNumber, {
-    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]][input$DTPeaksFilter_rows_all[1:input$NumFilterNumberOfRegions],]
-    
-    output$DTPeaksFilter = DT::renderDataTable({
-      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-      DT::datatable(df, 
-                    filter = list(position = "top", clear = TRUE, plain = F),
-                    options = list(
-                      scrollX = T,
-                      pageLength = 10), rownames = F)
+  output$DTPeaksFilter = DT::renderDataTable({
+    df = FilteringDF()
+    if(is.null(df)) return(NULL)
+    # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+    DT::datatable(df, 
+                  filter = list(position = "top", clear = TRUE, plain = F),
+                  options = list(
+                    scrollX = T,
+                    pageLength = 10), rownames = F)
+  })
+  
+  observeEvent(FilteringDF(), {
+    df = FilteringDF()
+    # showNotification("check update DTPeaksFilterElements")
+    if(is.null(df)) return(NULL)
+    output$DTPeaksFilterElements = renderUI({
+        tagList(
+          numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
+          actionButton("BtnFilterByNumber", label = "Truncate"),
+          actionButton("BtnFilterReloadFile", label = "Reload File")
+        )
     })
+  })
+  
+  observeEvent(input$BtnFilterByNumber, {
+    df = FilteringDF()
+    df = df[input$DTPeaksFilter_rows_all[1:input$NumFilterNumberOfRegions],]
+    FilteringDF(df)
+    # output$DTPeaksFilter = DT::renderDataTable({
+    #   # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+    #   DT::datatable(df, 
+    #                 filter = list(position = "top", clear = TRUE, plain = F),
+    #                 options = list(
+    #                   scrollX = T,
+    #                   pageLength = 10), rownames = F)
+    # })
     
   })
   observeEvent(input$BtnFilterReloadFile, {
     filepath = SetsLoaded_FilePaths()[[input$ChooseIntervalSets$selected]]
     df = load_peak_wValidation(filepath)
-    
-    output$DTPeaksFilter = DT::renderDataTable({
-      # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-      DT::datatable(df, 
-                    filter = list(position = "top", clear = TRUE, plain = F),
-                    options = list(
-                      scrollX = T,
-                      pageLength = 10), rownames = F)
-    })
+    FilteringDF(df)
+    #not necessary if setting df triggers update
+    # output$DTPeaksFilter = DT::renderDataTable({
+    #   # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
+    #   DT::datatable(df, 
+    #                 filter = list(position = "top", clear = TRUE, plain = F),
+    #                 options = list(
+    #                   scrollX = T,
+    #                   pageLength = 10), rownames = F)
+    # })
   })
   observeEvent(input$BtnConfirmFilter, {
     tmp = SetsLoaded_DataFrames()
     df = tmp[[input$ChooseIntervalSets$selected]]
-    tmp[[input$ChooseIntervalSets$selected]] = df[input$DTPeaksFilter_rows_all,]
+    tmp[[input$ChooseIntervalSets$selected]] = FilteringDF()
     
     SetsLoaded_DataFrames(tmp)
+    FilteringDF(NULL)
     removeModal()
     # showNotification("Confirm filter.", type = "message")
   })
