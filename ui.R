@@ -61,7 +61,7 @@ shinyUI(fluidPage(
                  )#,
     ),
     mainPanel(
-      tags$h3("Preview of Loaded File : ", tags$span("this can be filtered and sorted in Step 2", style="color:red")),
+      tags$h3("Preview of Loaded File : ", tags$span("this can be filtered and sorted in Step 2.", style="color:red")),
       DT::dataTableOutput("DTPeaksPreview")
     )
   ),
