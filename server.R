@@ -23,34 +23,23 @@ shinyServer(function(input, output, session) {
   #Set Organization of Loaded reactives
   SetsLoaded_Selected = reactiveVal(value = character(), label = "SetsLoaded_Selected")
   #deprecate for SetsLoaded_metaDF
-  SetsLoaded_DataFrames = reactiveVal(value = list(), label = "SetsLoaded_DataFrames")
-  SetsLoaded_FilePaths = reactiveVal(value = list(), label = "SetsLoaded_FilePaths")
-  SetsLoaded_DisplayNames = reactiveVal(value = list(), label = "SetsLoaded_DisplayNames")
-  
-  # SetsLoaded_metaDF = reactiveVal(value = create_metaDF_empty())
-  
+  SetsLoaded_metaDF = reactiveVal(value = create_metaDF_empty())
   
   observeEvent(input$BtnAddFile, {
     if(is.null(PreviewSet_DataFrame())) return(NULL)
-    tmp = SetsLoaded_DataFrames()
-    tmp2 = SetsLoaded_FilePaths()
-    tmp3 = SetsLoaded_DisplayNames()
+    current_loaded = SetsLoaded_metaDF()
     name_in_list = input$TxtFileName
-    if(any(names(tmp) == name_in_list)){
-      n = sum(grepl(name_in_list, names(tmp), fixed = T))
+    if(any(current_loaded$id_name == name_in_list)){
+      n = sum(grepl(name_in_list, current_loaded$id_name, fixed = T))
       name_in_list = paste0(name_in_list, "(", n, ")")
     }
-    tmp[[name_in_list]] = PreviewSet_DataFrame()[input$DTPeaksPreview_rows_all,]
-    tmp2[[name_in_list]] = PreviewSet_Filepath()
-    tmp3[[name_in_list]] = name_in_list
-    SetsLoaded_DataFrames(tmp)
-    SetsLoaded_FilePaths(tmp2)
-    SetsLoaded_DisplayNames(tmp3)
-    sets = input$ChooseIntervalSets
+    to_add = create_metaDF_row(name_in_list, PreviewSet_DataFrame(), PreviewSet_Filepath(), name_in_list)
+    SetsLoaded_metaDF(rbind(current_loaded, to_add))
+    set_chooser = input$ChooseIntervalSets
     output$SetChooser = renderUI({
-      pfl = sets$left
+      pfl = set_chooser$left
       #add to active
-      pfr = c(sets$right, name_in_list)
+      pfr = c(set_chooser$right, name_in_list)
       
       # print(pf)
       return(chooserInput(inputId = "ChooseIntervalSets", 
@@ -61,8 +50,8 @@ shinyServer(function(input, output, session) {
     PreviewSet_Name("")
   })
   
-  observeEvent(SetsLoaded_DataFrames(), {
-    if(length(SetsLoaded_DataFrames()) == 0){
+  observeEvent(SetsLoaded_metaDF(), {
+    if(nrow(SetsLoaded_metaDF()) == 0){
       output$SetChooser = renderUI({
         pfl = character()
         #add to active
@@ -138,24 +127,25 @@ shinyServer(function(input, output, session) {
   observeEvent(
     eventExpr = {
       input$ChooseIntervalSets
-      SetsLoaded_DataFrames()
+      SetsLoaded_metaDF()
     }, 
     handlerExpr = {
-      sets = input$ChooseIntervalSets
-      active = sets$right
-      selected = paste("selected:", sets$selected)
-      file_paths =  SetsLoaded_FilePaths()
-      data_frames = SetsLoaded_DataFrames()
-      if(length(active) > 0){
-        active_list = sapply(1:length(active), function(i){
-          paste0("\t", i, ") ", active[i], ": ", nrow(data_frames[[active[i]]]), "    : ", file_paths[[active[i]]])
+      set_chooser = input$ChooseIntervalSets
+      active_set_display_names = set_chooser$right
+      selected = paste("selected:", set_chooser$selected)
+      loaded = SetsLoaded_metaDF()
+      if(length(active_set_display_names) > 0){
+        active_list = sapply(1:length(active_set_display_names), function(i){
+          active_name = active_set_display_names[i]
+          df = loaded[active_name, ]
+          paste0("\t", i, ") ", active_name, ": ", nrow(df$data_frame[[1]]), "    : ", df$file_path)
         })
       }else{
         active_list = character()
       }
       str = paste(sep = "\n",
                   "---Selection Debug Info---",
-                  paste("active lens:", length(active), "DFs lens:", length(data_frames), "files lens:", length(file_paths)),
+                  paste("active lens:", length(active_set_display_names), "DFs lens:", nrow(loaded)),
                   selected, 
                   "active sets:",
                   paste(active_list, collapse = "\n"))
@@ -167,21 +157,18 @@ shinyServer(function(input, output, session) {
     })
   ###Delete Set Operations
   observeEvent(input$BtnDeleteSet, {
-    sets = input$ChooseIntervalSets
-    to_del = sets$selected
+    set_chooser = input$ChooseIntervalSets
+    to_del = set_chooser$selected
     
-    tmp = SetsLoaded_DataFrames()
-    tmp = tmp[setdiff(names(tmp), to_del)]
-    SetsLoaded_DataFrames(tmp)
-    tmp2 = SetsLoaded_FilePaths()
-    tmp2 = tmp2[setdiff(names(tmp2), to_del)]
-    SetsLoaded_FilePaths(tmp2)
-    
-    sets$left = setdiff(sets$left, to_del)
-    sets$right = setdiff(sets$right, to_del)
+    loaded = SetsLoaded_metaDF()
+    loaded = loaded[setdiff(rownames(loaded), to_del),]
+    SetsLoaded_metaDF(loaded)
+
+    set_chooser$left = setdiff(set_chooser$left, to_del)
+    set_chooser$right = setdiff(set_chooser$right, to_del)
     output$SetChooser = renderUI({
-      pfl = sets$left
-      pfr = sets$right
+      pfl = set_chooser$left
+      pfr = set_chooser$right
       return(chooserInput(inputId = "ChooseIntervalSets", 
                           leftLabel = "Ready", rightLabel = "For Analysis", 
                           leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
@@ -191,39 +178,41 @@ shinyServer(function(input, output, session) {
   ###Renaming Set operations
   #launch modal
   observeEvent(input$BtnRenameSet, {
-    sets = input$ChooseIntervalSets
-    if(is.null(sets)) return(NULL)
-    if(length(sets$selected) == 0) return(NULL)
-    # print(sets)
-    showModal(dataModal(sets = sets))
+    set_chooser = input$ChooseIntervalSets
+    if(is.null(set_chooser)) return(NULL)
+    if(length(set_chooser$selected) == 0) return(NULL)
+    # print(set_chooser)
+    showModal(dataModal(sets = set_chooser))
   })
   #check if rename in modal is valid and if not, relaunch modal with additional error message
   observeEvent(input$BtnConfirmRename, {
-    sets = input$ChooseIntervalSets
-    old_name = sets$selected[1]
+    set_chooser = input$ChooseIntervalSets
+    old_name = set_chooser$selected[1]
     new_name = input$TxtRename
     print(paste("rename", old_name, "-->", new_name))
     if(old_name == new_name){
       #if no change, that's fine
       removeModal()
-    }else if(any(c(unique(c(sets$left, sets$right)) == new_name))){
+    }else if(any(c(unique(c(set_chooser$left, set_chooser$right)) == new_name))){
       #if duplicated name, go to failure
-      showModal(dataModal(sets, failed = TRUE))
+      showModal(dataModal(set_chooser, failed = TRUE))
     }else{
       #do the renaming and update stuff
-      tmp = SetsLoaded_DataFrames()
-      names(tmp)[names(tmp) == old_name] = new_name
-      SetsLoaded_DataFrames(tmp)
-      tmp2 = SetsLoaded_FilePaths()
-      names(tmp2)[names(tmp2) == old_name] = new_name
-      SetsLoaded_FilePaths(tmp2)
-      
-      
-      sets$left[sets$left == old_name] = new_name
-      sets$right[sets$right == old_name] = new_name
+      #update in dipslay names
+      loaded = SetsLoaded_metaDF()
+      loaded[loaded$display_name == old_name,]$display_name = new_name
+      rownames(loaded) = loaded$display_name
+      SetsLoaded_metaDF(loaded)
+      #update to analyze names
+      to_analyze_names = SetsToAnalyze_Names()
+      to_analyze_names[to_analyze_names == old_name] = new_name
+      SetsToAnalyze_Names(to_analyze_names)
+      #update set chooser
+      set_chooser$left[set_chooser$left == old_name] = new_name
+      set_chooser$right[set_chooser$right == old_name] = new_name
       output$SetChooser = renderUI({
-        pfl = sets$left
-        pfr = sets$right
+        pfl = set_chooser$left
+        pfr = set_chooser$right
         return(chooserInput(inputId = "ChooseIntervalSets", 
                             leftLabel = "Ready", rightLabel = "For Analysis", 
                             leftChoices = pfl, rightChoices = pfr, size = 8, multiple = F))
@@ -240,8 +229,8 @@ shinyServer(function(input, output, session) {
       return()
     }
     #dataTable instance used to filter set data after adding
-    df = SetsLoaded_DataFrames()[[input$ChooseIntervalSets$selected]]
-    FilteringDF(df)
+    selected = SetsLoaded_metaDF()[input$ChooseIntervalSets$selected,]
+    FilteringDF(selected$data_frame[[1]])
     showModal(filterModal())
   })
   observeEvent(input$BtnCancelFilter, {
@@ -265,47 +254,33 @@ shinyServer(function(input, output, session) {
     if(is.null(df)) return(NULL)
     output$DTPeaksFilterElements = renderUI({
       tagList(
-        numericInput("NumFilterNumberOfRegions", "Truncate Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
-        actionButton("BtnFilterByNumber", label = "Truncate"),
+        numericInput("NumFilterNumberOfRegions", "Desired Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
+        actionButton("BtnFilterByTruncate", label = "Truncate"),
+        actionButton("BtnFilterByRandom", label = "Random Sample"),
         actionButton("BtnFilterReloadFile", label = "Reload File")
       )
     })
   })
   
-  observeEvent(input$BtnFilterByNumber, {
+  observeEvent(input$BtnFilterByRandom, {
+    df = FilteringDF()
+    df = df[sample(input$DTPeaksFilter_rows_all, size = input$NumFilterNumberOfRegions), ]
+    FilteringDF(df)
+  })
+  observeEvent(input$BtnFilterByTruncate, {
     df = FilteringDF()
     df = df[input$DTPeaksFilter_rows_all[1:input$NumFilterNumberOfRegions],]
     FilteringDF(df)
-    # output$DTPeaksFilter = DT::renderDataTable({
-    #   # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-    #   DT::datatable(df, 
-    #                 filter = list(position = "top", clear = TRUE, plain = F),
-    #                 options = list(
-    #                   scrollX = T,
-    #                   pageLength = 10), rownames = F)
-    # })
-    
   })
   observeEvent(input$BtnFilterReloadFile, {
-    filepath = SetsLoaded_FilePaths()[[input$ChooseIntervalSets$selected]]
+    filepath = SetsLoaded_metaDF()[input$ChooseIntervalSets$selected,]$file_path
     df = load_peak_wValidation(filepath)
     FilteringDF(df)
-    #not necessary if setting df triggers update
-    # output$DTPeaksFilter = DT::renderDataTable({
-    #   # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-    #   DT::datatable(df, 
-    #                 filter = list(position = "top", clear = TRUE, plain = F),
-    #                 options = list(
-    #                   scrollX = T,
-    #                   pageLength = 10), rownames = F)
-    # })
   })
   observeEvent(input$BtnConfirmFilter, {
-    tmp = SetsLoaded_DataFrames()
-    df = tmp[[input$ChooseIntervalSets$selected]]
-    tmp[[input$ChooseIntervalSets$selected]] = FilteringDF()
-    
-    SetsLoaded_DataFrames(tmp)
+    loaded = SetsLoaded_metaDF()
+    loaded[input$ChooseIntervalSets$selected, "data_frame"][[1]] = list(FilteringDF()[input$DTPeaksFilter_rows_all,])
+    SetsLoaded_metaDF(loaded)
     FilteringDF(NULL)
     removeModal()
     # showNotification("Confirm filter.", type = "message")
@@ -339,25 +314,18 @@ shinyServer(function(input, output, session) {
   
   
   #Load hardcoded example data 
-  observeEvent(input$BtnQuickFlat, handlerExpr = {
+  observeEvent(input$BtnQuickFlat, {
     peak_dirs = dir("/slipstream/galaxy/uploads/working/qc_framework/output_drugs_with_merged_inputs/", pattern = "MCF7_bza.+pooled", full.names = T)
     peak_files = sapply(peak_dirs[!grepl("_input_", peak_dirs)], function(d){dir(d, pattern = "peaks_passIDR", full.names = T)})
     names(peak_files) = sapply(strsplit(basename(peak_files), "_"), function(x)paste(x[1:3], collapse = "_"))
     peak_df = lapply(peak_files, load_peak_wValidation)
-    for(i in 1:length(peak_df)){
-      tmp = SetsLoaded_DataFrames()
-      tmp[[names(peak_df)[i]]] = peak_df[[i]]
-      SetsLoaded_DataFrames(tmp)
-      tmp2 = SetsLoaded_FilePaths()
-      tmp2[[names(peak_df)[i]]] = peak_files[i]
-      SetsLoaded_FilePaths(tmp2)
-    }
-    
-    sets = input$ChooseIntervalSets
+    new_metaDF = create_metaDF_row(names(peak_files), peak_df, peak_files, names(peak_files))
+    SetsLoaded_metaDF(new_metaDF)
+    set_chooser = input$ChooseIntervalSets
     output$SetChooser = renderUI({
-      pfl = sets$left
+      pfl = set_chooser$left
       #add to active
-      pfr = unique(c(sets$right, names(peak_df)))
+      pfr = unique(c(set_chooser$right, names(peak_df)))
       
       # print(pf)
       return(chooserInput(inputId = "ChooseIntervalSets", 
@@ -390,9 +358,22 @@ shinyServer(function(input, output, session) {
     }
   )
   ###THISTHING
-  SetsToAnalyze_DF = reactive({
-    if(length(intersect(SetsToAnalyze_Names(), names(SetsLoaded_DataFrames()))))
-      SetsLoaded_DataFrames()[intersect(SetsToAnalyze_Names(), names(SetsLoaded_DataFrames()))]
+  SetsToAnalyze_DF = reactiveVal(NULL)
+  observeEvent({
+    SetsToAnalyze_Names()
+    SetsLoaded_metaDF()
+  }, {
+    if(length(SetsToAnalyze_Names()) == 0){
+      SetsToAnalyze_DF(NULL)
+      return()
+    }
+    if(all(SetsToAnalyze_Names() %in% SetsLoaded_metaDF()$display_name)){
+      df = SetsLoaded_metaDF()$data_frame
+      names(df) = SetsLoaded_metaDF()$display_name
+      df = df[SetsToAnalyze_Names()]
+      SetsToAnalyze_DF(df)
+    }
+      
   })
   
   observeEvent(SetsToAnalyze_DF(), {showNotification("SetsToAnalyze_DF updated")})
@@ -416,11 +397,8 @@ shinyServer(function(input, output, session) {
       if(length(SetsToAnalyze_Names()) < 1) return(NULL)
       if(is.null(input$StrategyRadio)) return(NULL)
       if(is.null(input$NumericMergeExtension)) return(NULL)
+      if(!all(SetsToAnalyze_Names() %in% SetsLoaded_metaDF()$display_name)) return(NULL)
       #body
-      # to_analyze_ = SetsToAnalyze_Names()
-      # names(to_analyze_) = to_analyze_
-      # peak_df = SetsLoaded_DataFrames()
-      # peak_df = peak_df[to_analyze_]
       peak_gr = lapply(SetsToAnalyze_DF(), GRanges)
       print(names(peak_gr))
       GRangesToPlot(intersectR(grs = peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
@@ -453,7 +431,6 @@ shinyServer(function(input, output, session) {
     if(is.null(GRangesToPlot())) return(NULL)
     
     gr = GRangesToPlot()
-    nam = names(SetsLoaded_DataFrames())
     df = as.data.frame(elementMetadata(gr))
     tp = which(colnames(df) != "group")
     print("plot analysis render")
