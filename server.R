@@ -5,7 +5,7 @@
 # http://shiny.rstudio.com
 #
 source('server_setup.R')
-
+source("module_filter_modal.R")
 shinyServer(function(input, output, session) {
   #ShinyFile initialization
   shinyFileChoose(input, 'FilesLoadData', roots= roots_load, filetypes=c("narrowPeak", "broadPeak", "bed", "txt"))
@@ -163,7 +163,7 @@ shinyServer(function(input, output, session) {
     loaded = SetsLoaded_metaDF()
     loaded = loaded[setdiff(rownames(loaded), to_del),]
     SetsLoaded_metaDF(loaded)
-
+    
     set_chooser$left = setdiff(set_chooser$left, to_del)
     set_chooser$right = setdiff(set_chooser$right, to_del)
     output$SetChooser = renderUI({
@@ -221,70 +221,21 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  FilteringDF = reactiveVal(NULL)
-  
-  observeEvent(input$BtnFilterSet, {
-    if(length(input$ChooseIntervalSets$selected) != 1){
-      showNotification("No data selected in Step 2 right panel.", type = "error")
-      return()
-    }
-    #dataTable instance used to filter set data after adding
+  get_filtering_DF = function(){    
     selected = SetsLoaded_metaDF()[input$ChooseIntervalSets$selected,]
-    FilteringDF(selected$data_frame[[1]])
-    showModal(filterModal())
-  })
-  observeEvent(input$BtnCancelFilter, {
-    FilteringDF(NULL)
-    removeModal()
-  })
-  output$DTPeaksFilter = DT::renderDataTable({
-    df = FilteringDF()
-    if(is.null(df)) return(NULL)
-    # sdf = rbind(head(df), rep(".", ncol(df)), tail(df))
-    DT::datatable(df, 
-                  filter = list(position = "top", clear = TRUE, plain = F),
-                  options = list(
-                    scrollX = T,
-                    pageLength = 10), rownames = F)
-  })
-  
-  observeEvent(FilteringDF(), {
-    df = FilteringDF()
-    # showNotification("check update DTPeaksFilterElements")
-    if(is.null(df)) return(NULL)
-    output$DTPeaksFilterElements = renderUI({
-      tagList(
-        numericInput("NumFilterNumberOfRegions", "Desired Number of Regions", value = nrow(df), min = 0, max = nrow(df), step = 100),
-        actionButton("BtnFilterByTruncate", label = "Truncate"),
-        actionButton("BtnFilterByRandom", label = "Random Sample"),
-        actionButton("BtnFilterReloadFile", label = "Reload File")
-      )
-    })
-  })
-  
-  observeEvent(input$BtnFilterByRandom, {
-    df = FilteringDF()
-    df = df[sample(input$DTPeaksFilter_rows_all, size = input$NumFilterNumberOfRegions), ]
-    FilteringDF(df)
-  })
-  observeEvent(input$BtnFilterByTruncate, {
-    df = FilteringDF()
-    df = df[input$DTPeaksFilter_rows_all[1:input$NumFilterNumberOfRegions],]
-    FilteringDF(df)
-  })
-  observeEvent(input$BtnFilterReloadFile, {
-    filepath = SetsLoaded_metaDF()[input$ChooseIntervalSets$selected,]$file_path
-    df = load_peak_wValidation(filepath)
-    FilteringDF(df)
-  })
-  observeEvent(input$BtnConfirmFilter, {
+    selected$data_frame[[1]]
+  }
+  set_filtering_DF = function(new_df){
     loaded = SetsLoaded_metaDF()
-    loaded[input$ChooseIntervalSets$selected, "data_frame"][[1]] = list(FilteringDF()[input$DTPeaksFilter_rows_all,])
+    loaded[input$ChooseIntervalSets$selected, "data_frame"][[1]] = list(new_df)
     SetsLoaded_metaDF(loaded)
-    FilteringDF(NULL)
-    removeModal()
-    # showNotification("Confirm filter.", type = "message")
-  })
+    
+  }
+  get_file_path = function(){
+    SetsLoaded_metaDF()[input$ChooseIntervalSets$selected,]$file_path
+  }
+  server_filterModal(input, output, session, 
+                     get_filtering_DF = get_filtering_DF, set_filtering_DF = set_filtering_DF, get_file_path = get_file_path)
   
   
   
@@ -373,7 +324,7 @@ shinyServer(function(input, output, session) {
       df = df[SetsToAnalyze_Names()]
       SetsToAnalyze_DF(df)
     }
-      
+    
   })
   
   observeEvent(SetsToAnalyze_DF(), {showNotification("SetsToAnalyze_DF updated")})

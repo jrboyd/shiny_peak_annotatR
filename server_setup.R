@@ -33,26 +33,6 @@ dataModal <- function(sets, failed = FALSE) {
   )
 }
 
-filterModal <- function(failed = FALSE) {
-  modalDialog(
-    span('(Please filter the selected sample)'),
-    DT::dataTableOutput("DTPeaksFilter", width = "auto"),
-    if (failed)
-      div(tags$b("Hey man, this didn't work! Not sure why.", style = "color: red;")),
-    
-    footer = tagList(fluidRow(
-      column(width = 8,
-             uiOutput("DTPeaksFilterElements")),
-      column(width = 4,
-             actionButton("BtnCancelFilter", "Cancel"),
-             actionButton("BtnConfirmFilter", "Confirm")
-      )
-    )
-    ),
-    size = "l",
-    title = "Filtering"
-  )
-}
 
 
 shinyFiles2load = function(shinyF, roots){
