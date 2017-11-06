@@ -6,6 +6,7 @@
 
 library(shiny)
 library(shinyFiles)
+library(shinythemes)
 source("chooser.R")
 
 radioTooltip <- function(id, choice, title, placement = "bottom", trigger = "hover", options = NULL){
@@ -30,7 +31,7 @@ radioTooltip <- function(id, choice, title, placement = "bottom", trigger = "hov
 
 
 shinyUI(fluidPage(
-  
+  theme = shinytheme("spacelab"),
   # Application title
   titlePanel("peak intersectR"),
   # radioButtons(inputId = "StrategyRadio", label = "Strategy Type", choices = c("serial (pie chart friendly)" = "serial", "flat (venn diagram friendly)" = "flat")),
