@@ -351,7 +351,9 @@ shinyServer(function(input, output, session) {
       if(!all(SetsToAnalyze_Names() %in% SetsLoaded_metaDF()$display_name)) return(NULL)
       #body
       peak_gr = lapply(SetsToAnalyze_DF(), GRanges)
+      if(is.null(names(peak_gr))) return(NULL)
       print(names(peak_gr))
+      
       GRangesToPlot(intersectR(grs = peak_gr, use_first = input$StrategyRadio == "serial", ext = input$NumericMergeExtension))
     })
   

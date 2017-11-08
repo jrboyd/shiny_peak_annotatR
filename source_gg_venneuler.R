@@ -1,6 +1,10 @@
-if (!require("pacman")) install.packages("pacman")
+library(pacman)
+library(dplyr)
+library(venneuler)
+library(ggforce)
+library(textshape)
 #from https://gist.github.com/trinker/31edc08d0a4ec4c73935a23040c2f6cb
-pacman::p_load(dplyr, venneuler, ggforce, textshape)
+# p_load(dplyr, venneuler, ggforce, textshape)
 
 gg_venneuler = function(memb){
   cn = colnames(memb)
