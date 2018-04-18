@@ -49,7 +49,7 @@ gg_venn = function (object, names = NULL,
           panel.grid = element_blank(), legend.position = "top") +
     guides(fill = guide_legend(override.aes = list(shape = 21, size = 10 )))
   if (nsets <= 3) {
-    p = p + coord_cartesian(xlim = c(-4, 4), ylim = c(-4, 4))
+    # p = p + coord_cartesian(xlim = c(-4, 4), ylim = c(-4, 4))
     xcentres <- switch(nsets, 0, c(-1, 1), c(-1, 1, 0))
     ycentres <- switch(nsets, 0, c(0, 0), c(1, 1, -2)/sqrt(3))
     r <- 1.5
@@ -116,6 +116,7 @@ gg_venn = function (object, names = NULL,
     
     #only up to 3 sets supported so far
   }
+  p = p + scale_x_discrete(expand = c(.05))+ scale_y_discrete(expand = c(.05))
   return(p)
 }
 
