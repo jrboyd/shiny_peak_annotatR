@@ -71,9 +71,15 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$FilesLoadData, {
-    file_path = shinyFiles2load(input$FilesLoadData, roots_load)
-    PreviewSet_Filepath(file_path)
-    PreviewSet_Name(basename(file_path))
+    # print(class(input$FilesLoadData))
+    # if(!is.null(input$FilesLoadData$root)){
+    if("list" %in% class(input$FilesLoadData)){
+      file_path = shinyFiles2load(input$FilesLoadData, roots_load)
+      # print(input$FilesLoadData)
+      # file_path = roots_load[input$FilesLoadData]
+      PreviewSet_Filepath(file_path)
+      PreviewSet_Name(basename(file_path))
+    }
   })
   
   observeEvent(input$BtnUploadPeakfile, {
