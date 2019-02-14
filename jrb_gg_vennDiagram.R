@@ -116,7 +116,9 @@ gg_venn = function (object, names = NULL,
     
     #only up to 3 sets supported so far
   }
-  p = p + scale_x_discrete(expand = c(.05))+ scale_y_discrete(expand = c(.05))
+  p = p + 
+    scale_x_discrete(expand = c(.05, .05)) + 
+    scale_y_discrete(expand = c(.05, .05))
   return(p)
 }
 
